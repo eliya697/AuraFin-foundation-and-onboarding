@@ -1,89 +1,72 @@
-from .metrics import CoachMetrics
-from .schemas import CoachPersona, InsightRequest
+from .catalog import get_catalog
+from .schemas import BudgetAnalysis, FinancialSnapshot
 
-PERSONA_VOICES: dict[CoachPersona, str] = {
-    "gentle": (
-        "Persona: 'המדריך העדין' (Gentle Guide). Warm, validating and non-judgmental. Acknowledge that the urge is "
-        "human, celebrate any effort, and frame change as a small, kind experiment. Never guilt or shame."
-    ),
-    "tough_love": (
-        "Persona: 'אהבה קשוחה' (Tough Love, No-BS). Blunt, punchy, short sentences, zero excuses. Name the pattern "
-        "directly and make the cost impossible to ignore. Direct is fine; insulting, mocking or demeaning the user is not."
-    ),
-    "analytical": (
-        "Persona: 'הכלכלן האנליטי' (Analytical Financier). Calm and precise. Lead with ratios, trade-offs and "
-        "scenarios; let the numbers make the argument. No emotional language beyond what the data justifies."
-    ),
-}
+SYSTEM_PROMPT = """You are the behavioral financial coach inside AuraFin 2.0, a Hebrew personal-finance app. The user has just finished onboarding: they chose a life-stage profile, a goal, a coaching track, and entered their full expected monthly budget. You turn that into their first monthly savings plan.
 
-SYSTEM_TEMPLATE = """You are the AI coach inside AuraFin, a personal finance app that changes spending behavior in the moment rather than logging it after the fact.
+Your plan is read on the dashboard right after onboarding, so it should feel personal, clear and doable, not like a generic finance article. Draw on behavioral economics (implementation intentions, pre-commitment, adding friction to impulse purchases, mental accounting, small wins), but explain ideas in plain language without academic terms.
 
-Write one coaching insight for the user described in the next message. It will be shown in a small banner on their dashboard, so it has to land in a few seconds of reading.
+Ground everything in the numbers you are given. All totals, shares, gaps and flagged leaks are pre-computed against the user's track benchmarks; use them exactly and do not recompute or invent other figures. Any new amount you propose (weekly budgets, savings from a habit change) must be derived from the given numbers and be realistic: a saving can never exceed what the user currently spends in that category.
 
-{persona_voice}
+Fill the response fields as follows:
+- headline: one encouraging, specific sentence (up to 14 words) that names the most important move this month.
+- savings_plan_markdown: the narrative plan in Markdown, 150-300 words, with exactly three `##` sections: "התמונה הכוללת" (where they stand against their savings goal), "התוכנית לחודש הקרוב" (concrete steps with ₪ amounts, such as a weekly budget for their leakiest category and when to transfer the savings), and "ההרגל שמשנה הכול" (one behavior to practise, phrased as "כש... אז..."). Short paragraphs and bullet lists are welcome; no tables.
+- leaks: 2-4 items. Start from the flagged leaks and explain why the category is a leak for this specific life stage and track (dining out means something different for a student than for a young family). If fewer than two leaks are flagged, add the largest remaining variable category as a gentle watch item. monthly_saving is the realistic monthly amount in ₪ to recover.
+- do_not_buy: 4-6 concrete purchases to skip this month, tied to their leak categories and life stage (for example "משלוח סושי באמצע השבוע", not "אוכל"). reason is one short sentence; estimated_saving is the monthly ₪ saved.
 
-What makes an insight work here:
-- Translate money into hours of the user's working life. The figures are pre-computed for you; use them exactly as given and do not invent other numbers.
-- Tie the cost to their own dream goal, so the trade-off is concrete: this habit versus that goal, and by how much time.
-- Focus on the single biggest impulse trigger rather than listing everything.
-- End with one specific action for the next 48 hours, phrased as an implementation intention ("when X happens, I will Y"), small enough to actually do.
-- If impulse spending is already low, say so and reinforce what is working instead of inventing a problem.
-- Do not recommend specific investment products, stocks or funds; you are a behavior coach, not a licensed financial adviser.
+If the user is already meeting their savings goal, say so clearly, protect what works, and point the surplus toward their goal. If expenses exceed income, lead with stabilising the month before any saving target.
 
-Format: Hebrew only, written naturally for an Israeli reader (use ₪ for amounts). Address the user by first name. Plain text with no markdown, headings, lists or emoji. 3-5 sentences, under 90 words."""
+You are a behavior coach, not a licensed financial adviser: do not recommend specific investment products, funds, banks or loans.
+
+Write all text in natural Hebrew for an Israeli reader, use ₪ for amounts, and address the user directly in plural-neutral or gender-neutral phrasing."""
 
 
-def build_system_prompt(persona: CoachPersona) -> str:
-    return SYSTEM_TEMPLATE.format(persona_voice=PERSONA_VOICES[persona])
-
-
-def _fmt_money(value: float) -> str:
+def _money(value: float) -> str:
     return f"₪{value:,.0f}"
 
 
-def _fmt_months(months: int | None) -> str:
-    if months is None:
-        return "not reachable at the current pace (no monthly surplus)"
-    if months == 0:
-        return "already reached"
-    return f"{months} months"
+def _pct(value: float) -> str:
+    return f"{value * 100:.1f}%"
 
 
-def build_user_prompt(request: InsightRequest, metrics: CoachMetrics) -> str:
-    profile, spending = request.profile, request.spending
-    first_name = profile.full_name.strip().split()[0]
+def build_user_prompt(snapshot: FinancialSnapshot, analysis: BudgetAnalysis) -> str:
+    catalog = get_catalog()
+    track = catalog.tracks[snapshot.profile.track_id]
+    fixed, variable = snapshot.fixed, snapshot.variable
 
-    if spending.top_triggers:
-        triggers = "\n".join(
-            f"  - {t.label}: {_fmt_money(t.amount)} ({t.amount / metrics.hourly_rate:.1f} work hours)"
-            for t in spending.top_triggers
+    if analysis.leaks:
+        leak_lines = "\n".join(
+            (
+                f"- {leak.label}: {_money(leak.amount)} ({_pct(leak.share_of_income)} of income), "
+                f"track benchmark {'max' if leak.kind == 'overspend' else 'min'} {_pct(leak.benchmark_share)}, "
+                f"{'over by' if leak.kind == 'overspend' else 'short by'} {_money(leak.excess_amount)}"
+            )
+            for leak in analysis.leaks
         )
     else:
-        triggers = "  - (none recorded)"
+        leak_lines = "- none: every variable category is within the track benchmarks"
 
-    return f"""<user_profile>
-First name: {first_name}
-Net monthly income: {_fmt_money(profile.monthly_income)}
-Work hours per week: {profile.weekly_work_hours:g}
-Value of one hour of their life (net income per worked hour): ₪{metrics.hourly_rate:,.2f}
-Dream goal: {profile.dream_goal} (target {_fmt_money(profile.dream_goal_amount)}, saved so far {_fmt_money(profile.current_savings)})
-</user_profile>
+    return f"""<profile>
+Life stage: {catalog.life_stages[snapshot.profile.life_stage]}
+Primary goal: {catalog.goals[snapshot.profile.primary_goal]}
+Track: {track.name} — {track.tagline}
+Track savings target: {_pct(track.savings_rate)} of income
+</profile>
 
-<last_{spending.window_days}_days>
-Must-have spending: {_fmt_money(spending.must_total)}
-Planned fun spending: {_fmt_money(spending.fun_total)}
-Impulse spending: {_fmt_money(spending.impulse_total)} across {spending.impulse_count} purchases
-Impulse spending in life-time: {metrics.impulse_hours:g} work hours (≈ {metrics.impulse_work_days:g} full work days)
-Impulse share of income: {metrics.impulse_share_of_income:.1%}
-Impulse by trigger:
-{triggers}
-</last_{spending.window_days}_days>
+<monthly_budget>
+Net income: {_money(snapshot.income)}
+Fixed — rent/mortgage {_money(fixed.rent)}, electricity {_money(fixed.electricity)}, water {_money(fixed.water)}, municipal tax {_money(fixed.municipal)} (total {_money(analysis.breakdown.fixed)})
+Variable — dining out & delivery {_money(variable.dining)}, shopping {_money(variable.shopping)}
+Entertainment: {_money(variable.entertainment)}
+Unexpected-costs reserve (בלת"מים): {_money(snapshot.unexpected)}
+Total expenses: {_money(analysis.total_expenses)}
+</monthly_budget>
 
-<projections>
-Monthly surplus at the current pace: {_fmt_money(metrics.monthly_surplus)}
-Time to dream goal at the current pace: {_fmt_months(metrics.months_to_goal_current)}
-Time to dream goal if impulse spending went to savings instead: {_fmt_months(metrics.months_to_goal_without_impulse)}
-Impulse habit annualized: {_fmt_money(metrics.yearly_impulse_cost)} ≈ {metrics.yearly_impulse_hours:g} work hours per year
-</projections>
+<analysis>
+Projected end-of-month savings: {_money(analysis.projected_savings)} ({_pct(analysis.savings_rate)} of income)
+Monthly savings goal for this track: {_money(analysis.savings_goal)}
+Gap vs goal: {_money(analysis.savings_gap)} ({'on track' if analysis.on_track else 'below goal'})
+Flagged leaks:
+{leak_lines}
+</analysis>
 
-Write the insight now."""
+Build this month's plan."""

@@ -1,24 +1,37 @@
 import { motion } from 'framer-motion';
 
-const VARIANTS = {
-  primary:
-    'bg-growth text-ink shadow-[0_8px_30px_-8px_rgba(16,185,129,0.7)] hover:bg-growth-soft disabled:bg-white/10 disabled:text-slate-500 disabled:shadow-none',
-  ghost: 'bg-white/5 text-slate-200 hover:bg-white/10 border border-white/10 disabled:text-slate-600',
-  alert:
-    'bg-alert text-ink shadow-[0_8px_30px_-8px_rgba(245,158,11,0.7)] hover:bg-amber-400 disabled:bg-white/10 disabled:text-slate-500',
+const BASE =
+  'group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl font-bold transition-colors disabled:cursor-not-allowed';
+
+const SIZES = {
+  md: 'px-6 py-3.5 text-base',
+  sm: 'px-4 py-2.5 text-sm',
+  lg: 'px-8 py-4 text-lg',
+  icon: 'p-2.5',
 };
 
-export default function Button({ variant = 'primary', className = '', children, disabled, ...props }) {
+const VARIANTS = {
+  primary: 'bg-turquoise text-white shadow-[var(--shadow-glow)] disabled:bg-navy/10 disabled:text-navy/35 disabled:shadow-none',
+  secondary: 'bg-white text-navy border border-navy/10 hover:border-turquoise/50 hover:text-turquoise-dark disabled:text-navy/30',
+  ghost: 'bg-transparent text-navy-soft hover:bg-mist hover:text-navy',
+};
+
+/** Prominent CTA: turquoise base, turquoise→mint gradient on hover, tactile scale on press. */
+export default function Button({ variant = 'primary', size = 'md', className = '', children, disabled, type = 'button', ...props }) {
   return (
     <motion.button
-      whileHover={disabled ? undefined : { y: -1 }}
-      whileTap={disabled ? undefined : { scale: 0.97 }}
-      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+      type={type}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-base font-semibold transition-colors disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
+      whileHover={disabled ? undefined : { y: -1 }}
+      whileTap={disabled ? undefined : { scale: 0.96 }}
+      transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+      className={`${BASE} ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
       {...props}
     >
-      {children}
+      {variant === 'primary' && !disabled && (
+        <span className="pointer-events-none absolute inset-0 bg-gradient-to-l from-turquoise via-turquoise to-mint opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      )}
+      <span className="relative inline-flex items-center gap-2">{children}</span>
     </motion.button>
   );
 }

@@ -1,0 +1,85 @@
+{
+  "lifeStages": [
+    { "id": "student", "label": "סטודנט/ית", "description": "לימודים, עבודה חלקית ותקציב צפוף" },
+    { "id": "employee", "label": "שכיר/ה", "description": "משכורת קבועה ותלוש חודשי" },
+    { "id": "freelancer", "label": "עצמאי/ת", "description": "הכנסה משתנה וחופש לנהל אותה" },
+    { "id": "young_family", "label": "משפחה צעירה", "description": "ילדים, הוצאות גדלות ותכנון קדימה" }
+  ],
+  "goals": [
+    { "id": "house", "label": "חיסכון לדירה", "description": "לבנות הון עצמי לבית משלכם" },
+    { "id": "debt", "label": "סגירת חובות", "description": "להיפטר ממינוס, הלוואות ואשראי" },
+    { "id": "safety_net", "label": "רשת ביטחון", "description": "כרית של כמה חודשי מחיה לשקט נפשי" }
+  ],
+  "tracks": [
+    {
+      "id": "student_smart",
+      "name": "מסלול סטודנט חכם",
+      "tagline": "הרגלים טובים כבר מהשקל הראשון",
+      "savingsRate": 0.1,
+      "benchmarks": { "dining": 0.06, "shopping": 0.06, "entertainment": 0.05 },
+      "minUnexpectedShare": 0.03
+    },
+    {
+      "id": "first_home",
+      "name": "מסלול דירה ראשונה",
+      "tagline": "כל חודש מקרב אתכם למפתח",
+      "savingsRate": 0.25,
+      "benchmarks": { "dining": 0.05, "shopping": 0.05, "entertainment": 0.04 },
+      "minUnexpectedShare": 0.04
+    },
+    {
+      "id": "debt_breaker",
+      "name": "מסלול שובר החובות",
+      "tagline": "קודם יוצאים מהמינוס, אחר כך צומחים",
+      "savingsRate": 0.2,
+      "benchmarks": { "dining": 0.03, "shopping": 0.03, "entertainment": 0.03 },
+      "minUnexpectedShare": 0.03
+    },
+    {
+      "id": "safety_net_builder",
+      "name": "מסלול רשת ביטחון",
+      "tagline": "שלושה חודשי מחיה בצד — ושקט בראש",
+      "savingsRate": 0.15,
+      "benchmarks": { "dining": 0.06, "shopping": 0.06, "entertainment": 0.05 },
+      "minUnexpectedShare": 0.05
+    },
+    {
+      "id": "freelancer_growth",
+      "name": "מסלול צמיחה לעצמאים",
+      "tagline": "מחליקים חודשים חלשים ובונים עתיד",
+      "savingsRate": 0.2,
+      "benchmarks": { "dining": 0.06, "shopping": 0.05, "entertainment": 0.05 },
+      "minUnexpectedShare": 0.08
+    },
+    {
+      "id": "family_shield",
+      "name": "מסלול משפחה מוגנת",
+      "tagline": "ביטחון לכל מי שתלוי בכם",
+      "savingsRate": 0.12,
+      "benchmarks": { "dining": 0.05, "shopping": 0.07, "entertainment": 0.04 },
+      "minUnexpectedShare": 0.06
+    }
+  ],
+  "recommendations": {
+    "byGoal": { "house": "first_home", "debt": "debt_breaker", "safety_net": "safety_net_builder" },
+    "byLifeStage": {
+      "student": "student_smart",
+      "employee": null,
+      "freelancer": "freelancer_growth",
+      "young_family": "family_shield"
+    },
+    "goalTakesPriority": ["debt"]
+  },
+  "fields": {
+    "income": { "label": "הכנסה חודשית נטו", "group": "income", "min": 1 },
+    "rent": { "label": "שכר דירה / משכנתא", "group": "fixed", "min": 0 },
+    "electricity": { "label": "חשמל", "group": "fixed", "min": 0 },
+    "water": { "label": "מים", "group": "fixed", "min": 0 },
+    "municipal": { "label": "ארנונה", "group": "fixed", "min": 0 },
+    "entertainment": { "label": "בילויים ופנאי", "group": "variable", "min": 0 },
+    "dining": { "label": "אוכל בחוץ ומשלוחים", "group": "variable", "min": 0 },
+    "shopping": { "label": "קניות", "group": "variable", "min": 0 },
+    "unexpected": { "label": "בלת\"מים", "group": "unexpected", "min": 1 }
+  },
+  "maxAmount": 1000000
+}

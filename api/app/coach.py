@@ -1,14 +1,14 @@
-import json
+"""AI engine: turns a validated FinancialSnapshot into a structured savings plan."""
+
 import logging
-from collections.abc import AsyncIterator
-from dataclasses import asdict
 
 import anthropic
 
+from .analysis import analyze
+from .catalog import get_catalog
 from .config import Settings
-from .metrics import compute_metrics
-from .prompts import build_system_prompt, build_user_prompt
-from .schemas import InsightRequest
+from .prompts import SYSTEM_PROMPT, build_user_prompt
+from .schemas import BudgetAnalysis, CoachPlan, DoNotBuyItem, FinancialSnapshot, LeakInsight, PlanResponse
 
 logger = logging.getLogger("aurafin.coach")
 
@@ -16,58 +16,148 @@ logger = logging.getLogger("aurafin.coach")
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
-def sse(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+class CoachUnavailableError(Exception):
+    def __init__(self, message: str, status_code: int = 503) -> None:
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
 
 
 class CoachService:
-    def __init__(self, client: anthropic.AsyncAnthropic, settings: Settings) -> None:
-        self._client = client
+    def __init__(self, settings: Settings, client: anthropic.AsyncAnthropic | None) -> None:
         self._settings = settings
+        self._client = client
 
-    async def stream_insight(self, request: InsightRequest) -> AsyncIterator[str]:
-        """Yields Server-Sent Events: `meta`, then `delta`*, then `done` or `error`."""
-        metrics = compute_metrics(request)
-        yield sse("meta", {"model": self._settings.model, "metrics": asdict(metrics)})
+    async def build_plan(self, snapshot: FinancialSnapshot) -> PlanResponse:
+        analysis = analyze(snapshot)
+        if self._client is None:
+            return PlanResponse(analysis=analysis, plan=build_mock_plan(snapshot, analysis), source="mock", model=None)
 
+        plan, model = await self._ask_claude(snapshot, analysis)
+        return PlanResponse(analysis=analysis, plan=plan, source="claude", model=model)
+
+    async def _ask_claude(self, snapshot: FinancialSnapshot, analysis: BudgetAnalysis) -> tuple[CoachPlan, str]:
         try:
-            async with self._client.beta.messages.stream(
+            response = await self._client.beta.messages.parse(
                 model=self._settings.model,
                 max_tokens=self._settings.max_tokens,
-                system=build_system_prompt(request.profile.coach_persona),
-                messages=[{"role": "user", "content": build_user_prompt(request, metrics)}],
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": build_user_prompt(snapshot, analysis)}],
                 thinking={"type": "adaptive"},
                 output_config={"effort": self._settings.effort},
+                output_format=CoachPlan,
                 betas=[FALLBACK_BETA],
                 fallbacks="default",
-            ) as stream:
-                async for text in stream.text_stream:
-                    yield sse("delta", {"text": text})
-                final = await stream.get_final_message()
-        except anthropic.RateLimitError:
+            )
+        except anthropic.RateLimitError as exc:
             logger.warning("Claude rate limit hit")
-            yield sse("error", {"message": "המאמן עמוס כרגע. נסו שוב בעוד דקה."})
-            return
+            raise CoachUnavailableError("המאמן עמוס כרגע. נסו שוב בעוד דקה.", 429) from exc
         except anthropic.APIStatusError as exc:
             logger.error("Claude API error %s: %s", exc.status_code, exc.message)
-            yield sse("error", {"message": "המאמן לא זמין כרגע. נסו שוב מאוחר יותר."})
-            return
-        except anthropic.APIConnectionError:
+            raise CoachUnavailableError("המאמן לא זמין כרגע. נסו שוב מאוחר יותר.") from exc
+        except anthropic.APIConnectionError as exc:
             logger.exception("Could not reach the Claude API")
-            yield sse("error", {"message": "אין חיבור לשירות ה-AI. בדקו את החיבור ונסו שוב."})
-            return
+            raise CoachUnavailableError("אין חיבור לשירות ה-AI. נסו שוב.") from exc
 
-        if final.stop_reason == "refusal":
-            logger.warning("Claude declined the request: %s", final.stop_details)
-            yield sse("error", {"message": "לא הצלחנו לייצר תובנה לנתונים האלה. נסו שוב."})
-            return
+        if response.stop_reason == "refusal":
+            logger.warning("Claude declined the plan request: %s", response.stop_details)
+            raise CoachUnavailableError("לא הצלחנו לבנות תוכנית לנתונים האלה. נסו שוב.", 502)
+        if response.stop_reason == "max_tokens" or response.parsed_output is None:
+            logger.error("Plan output incomplete (stop_reason=%s)", response.stop_reason)
+            raise CoachUnavailableError("התוכנית נקטעה באמצע. נסו שוב.", 502)
 
-        yield sse(
-            "done",
-            {
-                "model": final.model,
-                "stop_reason": final.stop_reason,
-                "input_tokens": final.usage.input_tokens,
-                "output_tokens": final.usage.output_tokens,
-            },
+        logger.info(
+            "Plan generated by %s (in=%s out=%s)",
+            response.model,
+            response.usage.input_tokens,
+            response.usage.output_tokens,
         )
+        return response.parsed_output, response.model
+
+
+def _money(value: float) -> str:
+    return f"₪{value:,.0f}"
+
+
+def build_mock_plan(snapshot: FinancialSnapshot, analysis: BudgetAnalysis) -> CoachPlan:
+    """Offline plan generated from the deterministic analysis (used when no Claude credentials are configured)."""
+    catalog = get_catalog()
+    track = catalog.tracks[snapshot.profile.track_id]
+    variable = snapshot.variable
+
+    overspends = [leak for leak in analysis.leaks if leak.kind == "overspend"]
+    focus_key = overspends[0].category if overspends else max(
+        ("dining", "shopping", "entertainment"), key=lambda key: getattr(variable, key)
+    )
+    focus_label = catalog.field_labels[focus_key]
+    focus_amount = getattr(variable, focus_key)
+    focus_target = round(min(focus_amount, snapshot.income * track.benchmarks[focus_key]))
+    weekly = round(focus_target / 4.3)
+
+    if analysis.projected_savings < 0:
+        picture = (
+            f"ההוצאות המתוכננות ({_money(analysis.total_expenses)}) גבוהות מההכנסה ב־{_money(-analysis.projected_savings)}. "
+            "לפני שמדברים על חיסכון — מייצבים את החודש."
+        )
+    elif analysis.on_track:
+        picture = (
+            f"מעולה: צפויים להישאר לכם {_money(analysis.projected_savings)} בסוף החודש, "
+            f"מעל היעד של {track.name} ({_money(analysis.savings_goal)}). נשמור על זה."
+        )
+    else:
+        picture = (
+            f"בסוף החודש צפויים להישאר {_money(analysis.projected_savings)}, "
+            f"ויעד המסלול הוא {_money(analysis.savings_goal)} — חסרים {_money(-analysis.savings_gap)}."
+        )
+
+    markdown = f"""## התמונה הכוללת
+{picture}
+
+## התוכנית לחודש הקרוב
+- תקציב שבועי ל{focus_label}: **{_money(weekly)}** (במקום כ־{_money(focus_amount / 4.3)}).
+- ביום קבלת המשכורת מעבירים **{_money(max(analysis.savings_goal, 0))}** לחשבון חיסכון נפרד — לפני שמתחילים להוציא.
+- שומרים את {_money(snapshot.unexpected)} של הבלת"מים בצד, ולא נוגעים בהם לקניות.
+
+## ההרגל שמשנה הכול
+כשמתחשק לכם {focus_label} — אז מחכים 10 דקות ובודקים כמה נשאר מהתקציב השבועי."""
+
+    leaks = [
+        LeakInsight(
+            category=leak.category,
+            title=f"{leak.label} מעל הרף של המסלול" if leak.kind == "overspend" else "רשת הבלת\"מים דקה מדי",
+            explanation=(
+                f"{_money(leak.amount)} בחודש הם {leak.share_of_income * 100:.0f}% מההכנסה, "
+                f"כשהרף ב{track.name} הוא {leak.benchmark_share * 100:.0f}%."
+            ),
+            monthly_saving=int(leak.excess_amount),
+        )
+        for leak in analysis.leaks[:4]
+    ]
+    if not leaks:
+        leaks.append(
+            LeakInsight(
+                category=focus_key,
+                title=f"לשים עין על {focus_label}",
+                explanation=f"זו ההוצאה המשתנה הגדולה שלכם ({_money(focus_amount)}). כרגע בתוך הרף — שווה לשמור.",
+                monthly_saving=0,
+            )
+        )
+
+    catalog_items = {
+        "dining": [("משלוח באמצע השבוע", "ארוחה מהבית עולה כשליש", 0.3), ("קפה ומאפה בדרך לעבודה", "תרמוס מהבית עושה את העבודה", 0.15)],
+        "shopping": [("קנייה ב'מבצע' שלא תכננתם", "מבצע הוא סיבה לקנות, לא צורך", 0.35), ("עוד פריט אופנה החודש", "הארון לא יברח", 0.2)],
+        "entertainment": [("מנוי סטרימינג נוסף", "בחרו אחד ובטלו את השאר החודש", 0.15), ("יציאה ספונטנית שנייה בשבוע", "יציאה אחת מתוכננת שווה יותר", 0.3)],
+    }
+    ordered = [focus_key] + [key for key in ("dining", "shopping", "entertainment") if key != focus_key]
+    do_not_buy = [
+        DoNotBuyItem(item=item, reason=reason, estimated_saving=round(getattr(variable, key) * share))
+        for key in ordered
+        for item, reason, share in catalog_items[key]
+    ][:5]
+
+    return CoachPlan(
+        headline=f"החודש: תקציב שבועי של {_money(weekly)} ל{focus_label}",
+        savings_plan_markdown=markdown,
+        leaks=leaks,
+        do_not_buy=do_not_buy,
+    )

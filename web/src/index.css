@@ -1,60 +1,49 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #0b0f19;
-  --color-ink-soft: #111827;
-  --color-growth: #10b981;
-  --color-growth-soft: #34d399;
-  --color-alert: #f59e0b;
-  --color-coral: #fb7185;
+  --color-navy: #002147;
+  --color-navy-soft: #3d5a80;
+  --color-turquoise: #00c4cc;
+  --color-turquoise-dark: #00a3aa;
+  --color-mint: #00f299;
+  --color-royal: #1f4fd1;
+  --color-mist: #f3f8fb;
+  --color-danger: #e5484d;
   --font-sans: "Heebo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-soft: 0 1px 2px rgb(0 33 71 / 0.04), 0 12px 40px -12px rgb(0 33 71 / 0.14);
+  --shadow-lift: 0 2px 4px rgb(0 33 71 / 0.05), 0 24px 56px -16px rgb(0 33 71 / 0.22);
+  --shadow-glow: 0 12px 32px -10px rgb(0 196 204 / 0.55);
 }
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
     -webkit-tap-highlight-color: transparent;
   }
 
   body {
     min-height: 100dvh;
-    background-color: var(--color-ink);
-    background-image:
-      radial-gradient(60rem 40rem at 110% -10%, rgb(16 185 129 / 0.12), transparent 60%),
-      radial-gradient(50rem 36rem at -20% 110%, rgb(245 158 11 / 0.08), transparent 60%);
-    background-attachment: fixed;
-    color: rgb(226 232 240);
+    background-color: #ffffff;
+    color: var(--color-navy);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
 
-  input[type="number"]::-webkit-outer-spin-button,
-  input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  input[type="number"] {
-    -moz-appearance: textfield;
-  }
-
   ::selection {
-    background: rgb(16 185 129 / 0.35);
+    background: rgb(0 196 204 / 0.25);
+  }
+
+  :focus-visible {
+    outline: 3px solid rgb(0 196 204 / 0.45);
+    outline-offset: 2px;
   }
 }
 
-@layer components {
-  .field {
-    @apply w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-base text-white
-      placeholder:text-slate-500 outline-none transition
-      focus:border-growth/60 focus:bg-white/[0.07] focus:ring-4 focus:ring-growth/10;
-  }
-
-  .label {
-    @apply mb-2 block text-sm font-medium text-slate-300;
-  }
-
-  .range {
-    @apply h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-emerald-500;
+@layer utilities {
+  .text-gradient {
+    background-image: linear-gradient(90deg, var(--color-turquoise), var(--color-mint));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 }
