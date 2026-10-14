@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import OnboardingFlow from './features/onboarding/OnboardingFlow.jsx';
 import UpdateNotification from './components/UpdateNotification.jsx';
+import InstallBanner from './components/InstallBanner.jsx';
 import { useJourney } from './state/JourneyContext.jsx';
 
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard.jsx'));
@@ -36,6 +37,7 @@ export default function App() {
       </AnimatePresence>
       {/* Global: rendered outside the stage switch so it persists across every screen. */}
       <UpdateNotification />
+      <InstallBanner />
     </>
   );
 }

@@ -35,7 +35,9 @@ In offline mode the gate is enforced by the client only; with a backend, the ser
 
 ### Installable PWA
 
-- `web/public/manifest.webmanifest` uses relative `start_url`/`scope`/icon paths, so it resolves under the Pages subpath; `index.html` links it via `%BASE_URL%`.
+- `web/public/manifest.webmanifest` pins `id`, `start_url` and `scope` to `/AuraFin-foundation-and-onboarding/` and lists `any` + `maskable` PNG icons at 192 and 512; `index.html` links it via `%BASE_URL%`.
+- `src/pwa/installPrompt.js` captures `beforeinstallprompt` at module load (Chrome can fire it before React mounts); `components/InstallBanner.jsx` shows an "התקנת האפליקציה" button that calls `prompt()`, or Share → "הוספה למסך הבית" instructions on iOS Safari. Hidden when running installed; a dismissal is remembered for 14 days.
+- **Deploy with `npm run deploy`** (it runs `gh-pages -d dist --dotfiles`, so `.nojekyll` is published too). Changes here only reach phones after a deploy. After deploying, an already-open tab may need one reload so the new service worker takes over.
 - `web/public/sw.js` is registered in production builds only (`src/registerServiceWorker.js`): network-first for the page, cache-first for hashed assets and icons, stale-while-revalidate for Google Fonts. It never caches `/api/*` or the GitHub OTA check. Bump `CACHE_VERSION` when changing its caching rules.
 - Icons live in `web/public/icons/` (SVG sources + PNG renders at 192, 512, maskable 512 and the 180px `apple-touch-icon` for iOS). If you change the SVGs, re-render the PNGs at the same sizes.
 
