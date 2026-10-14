@@ -11,10 +11,10 @@ DEFAULT_CATALOG = Path(__file__).resolve().parents[2] / "shared" / "tracks.json"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="AURAFIN_", extra="ignore")
 
-    # "auto" uses Claude when credentials are present and the offline plan generator otherwise.
+    # "auto" uses Gemini when an API key is present and the offline plan generator otherwise.
     coach_mode: Literal["auto", "live", "mock"] = "auto"
-    model: str = "claude-sonnet-5-5"
-    effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # gemini-1.5-flash and gemini-2.0-flash are shut down; gemini-3.8-flash is the current stable Flash.
+    model: str = "gemini-3.8-flash"
     max_tokens: int = 16000
     catalog_path: Path = DEFAULT_CATALOG
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://eliya697.github.io"
@@ -24,9 +24,9 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 
     @property
-    def use_claude(self) -> bool:
+    def use_ai(self) -> bool:
         if self.coach_mode == "auto":
-            return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+            return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
         return self.coach_mode == "live"
 
 

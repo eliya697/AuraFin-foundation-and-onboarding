@@ -132,7 +132,7 @@ class BudgetAnalysis(BaseModel):
     leaks: list[DetectedLeak]
 
 
-# ── AI output (structured output schema sent to Claude) ───────────────────────
+# ── AI output (structured output schema sent to Gemini) ───────────────────────
 
 
 class LeakInsight(BaseModel):
@@ -163,5 +163,5 @@ class GateResponse(BaseModel):
 class PlanResponse(BaseModel):
     analysis: BudgetAnalysis
     plan: CoachPlan
-    source: Literal["claude", "mock"]
+    source: Literal["gemini", "mock"]
     model: str | None

@@ -13,7 +13,7 @@ def get_coach(request: Request) -> CoachService:
 
 @router.get("/health")
 async def health(request: Request) -> dict[str, str]:
-    return {"status": "ok", "coach": "claude" if request.app.state.coach_uses_claude else "mock"}
+    return {"status": "ok", "coach": "gemini" if request.app.state.coach_uses_ai else "mock"}
 
 
 @router.post("/gate/validate", response_model=GateResponse)

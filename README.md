@@ -1,11 +1,11 @@
 # AuraFin 2.0
 
-Bright, Hebrew-first (RTL) behavioral finance coach. A mandatory journey (Welcome → Profile Quiz → Expense Gate) collects a full monthly budget, then Claude builds a personal savings plan, leak report and "Do Not Buy" list.
+Bright, Hebrew-first (RTL) behavioral finance coach. A mandatory journey (Welcome → Profile Quiz → Expense Gate) collects a full monthly budget, then Google Gemini builds a personal savings plan, leak report and "Do Not Buy" list.
 
 ```
 shared/tracks.json   Single source of truth: life stages, goals, tracks, benchmarks, field rules (read by web + api)
 web/                 React 19 + Vite + Tailwind v4 + Framer Motion + Recharts
-api/                 FastAPI: gate validation, deterministic analysis, Claude plan generation
+api/                 FastAPI: gate validation, deterministic analysis, Gemini plan generation
 ```
 
 ## Run
@@ -15,7 +15,7 @@ api/                 FastAPI: gate validation, deterministic analysis, Claude pl
 cd api
 python -m venv .venv && .venv\Scripts\activate      # macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env                                 # optional: set ANTHROPIC_API_KEY
+cp .env.example .env                                 # optional: set GEMINI_API_KEY
 uvicorn app.main:app --reload --port 8000 --env-file .env
 
 # Web (terminal 2)
@@ -33,7 +33,7 @@ npm run dev                                          # http://localhost:5173, pr
 
 In offline mode the gate is enforced by the client only; with a backend, the server remains the authority.
 
-With no `ANTHROPIC_API_KEY`, `AURAFIN_COACH_MODE=auto` serves an offline plan built from the same analysis (the dashboard shows a "מצב הדגמה" badge). Set the key to use Claude (`claude-sonnet-5-5` by default; `claude-3-5-sonnet` is retired).
+With no `GEMINI_API_KEY`, `AURAFIN_COACH_MODE=auto` serves an offline plan built from the same analysis (the dashboard shows a "מצב הדגמה" badge). Set the key (from https://aistudio.google.com/apikey) to use Gemini. The default model is `gemini-3.8-flash`; `gemini-1.5-flash` and `gemini-2.0-flash` have been shut down by Google. Override with `AURAFIN_MODEL`.
 
 ## The mandatory journey
 
@@ -54,16 +54,16 @@ Enforcement is layered:
 
 - `api/app/analysis.py` computes totals (including children and custom items), projected end-of-month savings, the track's savings goal, and leaks (dining/shopping/entertainment above the track benchmark, or a בלת"מים reserve below its minimum — which rises 1% of income per child, capped at +4%). The model explains these numbers; it never computes them.
 - `web/src/lib/analysis.js` is a port of the same engine for offline mode. `shared/fixtures/analysis_cases.json` pins both to identical output; regenerate it with `python scripts/update_analysis_fixtures.py` after an intentional rule change.
-- `api/app/prompts.py` sends the exact figures plus the flagged leaks; `api/app/coach.py` calls Claude with structured outputs (`CoachPlan`: headline, Markdown savings plan, leaks, Do-Not-Buy list), adaptive thinking, and server-side refusal fallbacks.
+- `api/app/prompts.py` sends the exact figures plus the flagged leaks; `api/app/coach.py` calls Gemini (`google-genai` SDK, `client.aio.models.generate_content`) with a JSON response schema derived from `CoachPlan` (headline, Markdown savings plan, leaks, Do-Not-Buy list) and validates the reply with Pydantic. Rate limits, retired models, server errors, network failures, safety blocks, truncation and malformed JSON all map to clean JSON errors, so the web client never mistakes them for "offline".
 
 ## Tests
 
 ```bash
-cd api && pytest -q      # gate contract, children/custom rules, prompt content, Claude request shape, fixtures
+cd api && pytest -q      # gate contract, children/custom rules, prompt content, Gemini request shape + failure modes, fixtures
 cd web && npm test       # JS analysis engine vs the shared fixtures
 ```
 
-Covers the gate contract (missing/blank/string/negative/oversized values, zero reserve, unknown track, extra fields), the plan endpoint's re-validation, mock mode, and the exact Claude request shape (via a mocked transport, no API spend).
+Covers the gate contract (missing/blank/string/negative/oversized values, zero reserve, unknown track, extra fields), the plan endpoint's re-validation, mock mode, and the exact Gemini request shape and failure handling (via a stubbed client, no API spend).
 
 ## Note
 

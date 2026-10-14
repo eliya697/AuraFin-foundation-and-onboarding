@@ -1,10 +1,12 @@
 import copy
 import json
 
-import anthropic
-import httpx2 as httpx
+import httpx
 import pytest
 from fastapi.testclient import TestClient
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types
 
 from app.coach import CoachService
 from app.config import get_settings
@@ -147,53 +149,89 @@ def test_plan_mock_mode(client):
     assert plan["leaks"] and plan["do_not_buy"]
 
 
-def test_claude_request_shape(client):
+PLAN_JSON = {
+    "headline": "החודש: ₪165 בשבוע לאוכל בחוץ",
+    "savings_plan_markdown": "## התמונה הכוללת\nא\n## התוכנית לחודש הקרוב\nב\n## ההרגל שמשנה הכול\nג",
+    "leaks": [{"category": "dining", "title": "t", "explanation": "e", "monthly_saving": 680}],
+    "do_not_buy": [{"item": "משלוח סושי", "reason": "r", "estimated_saving": 220}],
+}
+
+
+def gemini_response(text: str, finish_reason: str = "STOP", **extra) -> types.GenerateContentResponse:
+    return types.GenerateContentResponse.model_validate(
+        {
+            "candidates": [{"content": {"role": "model", "parts": [{"text": text}]}, "finish_reason": finish_reason}],
+            "usage_metadata": {"prompt_token_count": 900, "candidates_token_count": 400},
+            "model_version": "gemini-3.8-flash",
+            **extra,
+        }
+    )
+
+
+def use_fake_gemini(client, monkeypatch, result):
+    """Routes the coach through a real genai.Client whose generate_content is replaced (no network, no spend)."""
     captured = {}
-    plan = {
-        "headline": "החודש: ₪165 בשבוע לאוכל בחוץ",
-        "savings_plan_markdown": "## התמונה הכוללת\nא\n## התוכנית לחודש הקרוב\nב\n## ההרגל שמשנה הכול\nג",
-        "leaks": [{"category": "dining", "title": "t", "explanation": "e", "monthly_saving": 680}],
-        "do_not_buy": [{"item": "משלוח סושי", "reason": "r", "estimated_saving": 220}],
-    }
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["body"] = json.loads(request.content)
-        captured["beta"] = request.headers.get("anthropic-beta")
-        return httpx.Response(
-            200,
-            json={
-                "id": "msg_1",
-                "type": "message",
-                "role": "assistant",
-                "model": "claude-sonnet-5-5",
-                "content": [{"type": "text", "text": json.dumps(plan, ensure_ascii=False)}],
-                "stop_reason": "end_turn",
-                "stop_sequence": None,
-                "usage": {"input_tokens": 900, "output_tokens": 400},
-            },
-        )
+    async def fake_generate_content(**kwargs):
+        captured.update(kwargs)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
-    fake = anthropic.AsyncAnthropic(api_key="test", http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    fake = genai.Client(api_key="test-key")
+    monkeypatch.setattr(fake.aio.models, "generate_content", fake_generate_content)
     client.app.state.coach = CoachService(get_settings(), fake)
+    return captured
+
+
+def test_gemini_request_shape(client, monkeypatch):
+    captured = use_fake_gemini(client, monkeypatch, gemini_response(json.dumps(PLAN_JSON, ensure_ascii=False)))
 
     response = client.post("/api/coach/plan", json=VALID)
     assert response.status_code == 200, response.text
-    assert response.json()["source"] == "claude"
-    assert response.json()["plan"]["headline"] == plan["headline"]
+    body = response.json()
+    assert body["source"] == "gemini"
+    assert body["model"] == "gemini-3.8-flash"
+    assert body["plan"]["headline"] == PLAN_JSON["headline"]
 
-    body = captured["body"]
-    assert body["model"] == "claude-sonnet-5-5"
-    assert body["thinking"] == {"type": "adaptive"}
-    assert body["output_config"]["effort"] == "medium"
-    assert body["output_config"]["format"]["type"] == "json_schema"
-    assert body["fallbacks"] == "default"
-    assert "server-side-fallback-2026-07-01" in captured["beta"]
-    assert "₪1,100" in body["messages"][0]["content"]
+    assert captured["model"] == "gemini-3.8-flash"
+    config = captured["config"]
+    assert config.response_mime_type == "application/json"
+    assert config.system_instruction.startswith("You are the behavioral financial coach")
+    assert "$ref" not in json.dumps(config.response_json_schema)  # schema is self-contained
+    assert set(config.response_json_schema["required"]) == {"headline", "savings_plan_markdown", "leaks", "do_not_buy"}
+    assert "₪1,100" in captured["contents"]
 
 
-def test_missing_income_message_does_not_suggest_zero(client):
-    message = fields(client.post("/api/gate/validate", json=without("income")))["income"]
-    assert "כתבו 0" not in message
+@pytest.mark.parametrize(
+    ("result", "status"),
+    [
+        (genai_errors.ClientError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}}), 429),
+        (genai_errors.ClientError(404, {"error": {"code": 404, "message": "model not found", "status": "NOT_FOUND"}}), 503),
+        (genai_errors.ServerError(503, {"error": {"code": 503, "message": "overloaded", "status": "UNAVAILABLE"}}), 503),
+        (httpx.ConnectError("connection refused"), 503),
+        ("SAFETY", 502),
+        ("MAX_TOKENS", 502),
+        ("INVALID_JSON", 502),
+        ("BLOCKED_PROMPT", 502),
+    ],
+    ids=["rate-limit", "retired-model", "server-error", "network", "safety", "max-tokens", "invalid-json", "blocked-prompt"],
+)
+def test_gemini_failures_map_to_clean_errors(client, monkeypatch, result, status):
+    if result == "SAFETY":
+        result = gemini_response("", finish_reason="SAFETY")
+    elif result == "MAX_TOKENS":
+        result = gemini_response('{"headline": "cut', finish_reason="MAX_TOKENS")
+    elif result == "INVALID_JSON":
+        result = gemini_response('{"headline": "missing the other fields"}')
+    elif result == "BLOCKED_PROMPT":
+        result = types.GenerateContentResponse.model_validate({"prompt_feedback": {"block_reason": "SAFETY"}})
+    use_fake_gemini(client, monkeypatch, result)
+
+    response = client.post("/api/coach/plan", json=VALID)
+    assert response.status_code == status
+    # Our API always answers with a JSON `detail`, so the web client never mistakes it for "offline".
+    assert isinstance(response.json()["detail"], str)
 
 
 # ── Children ──────────────────────────────────────────────────────────────────

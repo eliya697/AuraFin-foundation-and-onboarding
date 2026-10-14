@@ -1,10 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
 
-import anthropic
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from google import genai
 
 from .catalog import get_catalog
 from .coach import CoachService
@@ -20,15 +20,16 @@ logger = logging.getLogger("aurafin")
 async def lifespan(app: FastAPI):
     settings = get_settings()
     get_catalog()  # fail fast if shared/tracks.json is missing or malformed
-    client = anthropic.AsyncAnthropic() if settings.use_claude else None
+    # genai.Client() reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment.
+    client = genai.Client() if settings.use_ai else None
     app.state.coach = CoachService(settings, client)
-    app.state.coach_uses_claude = client is not None
-    logger.info("Coach engine: %s", f"Claude ({settings.model})" if client else "offline mock")
+    app.state.coach_uses_ai = client is not None
+    logger.info("Coach engine: %s", f"Gemini ({settings.model})" if client else "offline mock")
     try:
         yield
     finally:
         if client is not None:
-            await client.close()
+            await client.aio.aclose()
 
 
 def create_app() -> FastAPI:
