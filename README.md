@@ -33,6 +33,12 @@ npm run dev                                          # http://localhost:5173, pr
 
 In offline mode the gate is enforced by the client only; with a backend, the server remains the authority.
 
+### Installable PWA
+
+- `web/public/manifest.webmanifest` uses relative `start_url`/`scope`/icon paths, so it resolves under the Pages subpath; `index.html` links it via `%BASE_URL%`.
+- `web/public/sw.js` is registered in production builds only (`src/registerServiceWorker.js`): network-first for the page, cache-first for hashed assets and icons, stale-while-revalidate for Google Fonts. It never caches `/api/*` or the GitHub OTA check. Bump `CACHE_VERSION` when changing its caching rules.
+- Icons live in `web/public/icons/` (SVG sources + PNG renders at 192, 512, maskable 512 and the 180px `apple-touch-icon` for iOS). If you change the SVGs, re-render the PNGs at the same sizes.
+
 With no `GEMINI_API_KEY`, `AURAFIN_COACH_MODE=auto` serves an offline plan built from the same analysis (the dashboard shows a "מצב הדגמה" badge). Set the key (from https://aistudio.google.com/apikey) to use Gemini. The default model is `gemini-3.8-flash`; `gemini-1.5-flash` and `gemini-2.0-flash` have been shut down by Google. Override with `AURAFIN_MODEL`.
 
 ## The mandatory journey
