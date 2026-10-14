@@ -1,14 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
 import { TRACKS } from '../lib/catalog.js';
-import { EMPTY_BUDGET, buildSnapshot, isBudgetComplete } from '../lib/budget.js';
+import { EMPTY_BUDGET, MAX_CHILDREN, buildSnapshot, isBudgetComplete } from '../lib/budget.js';
 
 const STORAGE_KEY = 'aurafin:v2:journey';
 
 const initialState = {
   welcomeDone: false,
-  profile: null, // { lifeStage, goal, trackId }
-  budget: EMPTY_BUDGET,
-  unlock: null, // { fingerprint, analysis } — set only after the server accepted the snapshot
+  profile: null, // { lifeStage, goal, hasChildren, childrenCount, trackId }
+  budget: EMPTY_BUDGET, // scalar amounts as strings + custom: [{ id, title, amount }]
+  unlock: null, // { fingerprint, analysis, mode: 'server' | 'offline' }
   plan: null, // { fingerprint, data }
 };
 
@@ -17,7 +17,9 @@ function load() {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialState;
     const saved = JSON.parse(raw);
-    return { ...initialState, ...saved, budget: { ...EMPTY_BUDGET, ...saved.budget } };
+    const budget = { ...EMPTY_BUDGET, ...saved.budget };
+    if (!Array.isArray(budget.custom)) budget.custom = [];
+    return { ...initialState, ...saved, budget };
   } catch {
     return initialState;
   }
@@ -42,7 +44,11 @@ function reducer(state, action) {
     case 'budget_changed':
       return { ...state, budget: action.budget };
     case 'gate_unlocked':
-      return { ...state, budget: action.budget, unlock: { fingerprint: action.fingerprint, analysis: action.analysis } };
+      return {
+        ...state,
+        budget: action.budget,
+        unlock: { fingerprint: action.fingerprint, analysis: action.analysis, mode: action.mode },
+      };
     case 'gate_reopen':
       return { ...state, unlock: null };
     case 'plan_loaded':
@@ -59,18 +65,22 @@ export function fingerprintOf(profile, budget) {
 }
 
 function isProfileComplete(profile) {
-  return Boolean(profile?.lifeStage && profile?.goal && TRACKS[profile?.trackId]);
+  if (!profile?.lifeStage || !profile?.goal || !TRACKS[profile?.trackId]) return false;
+  if (typeof profile.hasChildren !== 'boolean') return false;
+  return profile.hasChildren
+    ? Number.isInteger(profile.childrenCount) && profile.childrenCount >= 1 && profile.childrenCount <= MAX_CHILDREN
+    : profile.childrenCount === 0;
 }
 
 /**
  * The journey guard. The dashboard is reachable only when the welcome was seen, the quiz is
- * complete, the budget passes validation AND the server unlocked exactly this snapshot.
- * Editing any number after unlocking sends the user back to the gate.
+ * complete, the budget passes validation AND the gate unlocked exactly this snapshot (on the
+ * server, or locally in offline mode). Editing any number after unlocking re-locks it.
  */
 export function resolveStage(state) {
   if (!state.welcomeDone) return 'welcome';
   if (!isProfileComplete(state.profile)) return 'quiz';
-  if (!isBudgetComplete(state.budget)) return 'gate';
+  if (!isBudgetComplete(state.budget, state.profile)) return 'gate';
   if (!state.unlock || state.unlock.fingerprint !== fingerprintOf(state.profile, state.budget)) return 'gate';
   return 'dashboard';
 }
@@ -95,8 +105,8 @@ export function JourneyProvider({ children }) {
   );
 
   const unlockDashboard = useCallback(
-    (budget, analysis) =>
-      dispatch({ type: 'gate_unlocked', budget, analysis, fingerprint: fingerprintOf(state.profile, budget) }),
+    (budget, analysis, mode = 'server') =>
+      dispatch({ type: 'gate_unlocked', budget, analysis, mode, fingerprint: fingerprintOf(state.profile, budget) }),
     [state.profile],
   );
 

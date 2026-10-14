@@ -3,17 +3,21 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, Loader2, Lock, LockOpen, TriangleAlert } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
 import MoneyInput from '../../components/ui/MoneyInput.jsx';
-import { FIELDS, TRACKS } from '../../lib/catalog.js';
+import CustomExpensesEditor from './CustomExpensesEditor.jsx';
+import { CATALOG, FIELDS, TRACKS } from '../../lib/catalog.js';
 import {
-  ALL_FIELDS,
-  GATE_STEPS,
   buildSnapshot,
   formatCurrency,
+  gateProgress,
+  getGateSteps,
   mapServerErrors,
   previewTotals,
-  validateFields,
+  stepOwnsError,
+  validateBudget,
+  validateSteps,
 } from '../../lib/budget.js';
-import { ApiError, validateGate } from '../../services/api.js';
+import { analyzeBudget } from '../../lib/analysis.js';
+import { ApiError, OfflineError, validateGate } from '../../services/api.js';
 import { useJourney } from '../../state/JourneyContext.jsx';
 
 const HINTS = {
@@ -30,6 +34,7 @@ export default function MandatoryExpenseGate() {
   const { state, updateBudget, unlockDashboard } = useJourney();
   const profile = state.profile;
   const track = TRACKS[profile.trackId];
+  const steps = useMemo(() => getGateSteps(profile), [profile]);
 
   const [values, setValues] = useState(state.budget);
   const [[stepIndex, direction], setStep] = useState([0, 1]);
@@ -41,46 +46,67 @@ export default function MandatoryExpenseGate() {
   const [submitting, setSubmitting] = useState(false);
   const inputRefs = useRef({});
 
-  const step = GATE_STEPS[stepIndex];
-  const isLast = stepIndex === GATE_STEPS.length - 1;
-  const liveErrors = useMemo(() => validateFields(values), [values]);
-  const completedFields = ALL_FIELDS.filter((key) => !liveErrors[key]).length;
-  const stepIsValid = (s) => s.fields.every((key) => !liveErrors[key] && !serverErrors[key]);
+  const step = steps[stepIndex];
+  const isLast = stepIndex === steps.length - 1;
+  const liveErrors = useMemo(() => validateBudget(values, profile), [values, profile]);
+  const progress = gateProgress(values, profile);
+  const stepErrorKeys = (s) =>
+    [...Object.keys(liveErrors), ...Object.keys(serverErrors)].filter((key) => stepOwnsError(s, key));
+  const stepIsValid = (s) => stepErrorKeys(s).length === 0;
 
   const visibleError = (key) => serverErrors[key] || ((attempted[step.key] || touched[key]) && liveErrors[key]) || null;
+  const markTouched = (key) => setTouched((prev) => ({ ...prev, [key]: true }));
 
-  const setValue = (key, value) => {
-    const next = { ...values, [key]: value };
+  const refs = {
+    set: (key, node) => {
+      inputRefs.current[key] = node;
+    },
+    focus: (key) => inputRefs.current[key]?.focus(),
+  };
+
+  const commit = (next, changedKeys) => {
     setValues(next);
     updateBudget(next);
     setBanner(null);
-    if (serverErrors[key]) setServerErrors(({ [key]: _, ...rest }) => rest);
+    if (changedKeys.some((key) => serverErrors[key])) {
+      setServerErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => !changedKeys.includes(key))));
+    }
   };
+
+  const setValue = (key, value) => commit({ ...values, [key]: value }, [key]);
+  const setCustom = (custom) => commit({ ...values, custom }, Object.keys(serverErrors).filter((k) => k.startsWith('custom')));
 
   const goTo = (index) => {
     setBanner(null);
     setStep(([current]) => [index, index >= current ? 1 : -1]);
   };
 
-  const block = (keys, message) => {
-    setAttempted((prev) => ({ ...prev, [step.key]: true }));
-    setShakeSignal((n) => n + 1);
-    setBanner({ tone: 'warning', message });
-    inputRefs.current[keys[0]]?.focus();
+  const describe = (keys) => {
+    if (keys.length !== 1) return `רגע — יש ${keys.length} שדות להשלים לפני שממשיכים. סימנו אותם באדום.`;
+    const label = FIELDS[keys[0]]?.label ?? 'ההוצאה האישית';
+    return `רגע — צריך להשלים את "${label}" כדי להמשיך.`;
   };
 
-  const missingMessage = (keys) =>
-    keys.length === 1
-      ? `רגע — צריך להשלים את "${FIELDS[keys[0]].label}" כדי להמשיך.`
-      : `רגע — יש ${keys.length} שדות להשלים לפני שממשיכים. סימנו אותם באדום.`;
+  const blockOn = (keys, stepKey = step.key) => {
+    setAttempted((prev) => ({ ...prev, [stepKey]: true }));
+    setShakeSignal((n) => n + 1);
+    setBanner({ tone: 'warning', message: describe(keys) });
+    refs.focus(keys[0]);
+  };
+
+  const unlockOffline = (reason) => {
+    const analysis = analyzeBudget(buildSnapshot(profile, values), CATALOG);
+    unlockDashboard(values, analysis, 'offline');
+    console.info(`[AuraFin] Gate validated locally (${reason}).`);
+  };
 
   const submit = async () => {
-    const invalid = ALL_FIELDS.filter((key) => liveErrors[key]);
+    const invalid = Object.keys(validateSteps(steps, values));
     if (invalid.length) {
-      const firstStep = GATE_STEPS.findIndex((s) => s.fields.includes(invalid[0]));
-      setAttempted(Object.fromEntries(GATE_STEPS.map((s) => [s.key, true])));
+      const firstStep = steps.findIndex((s) => stepOwnsError(s, invalid[0]));
+      setAttempted(Object.fromEntries(steps.map((s) => [s.key, true])));
       goTo(firstStep);
-      setBanner({ tone: 'warning', message: missingMessage(invalid) });
+      setBanner({ tone: 'warning', message: describe(invalid) });
       return;
     }
 
@@ -88,13 +114,17 @@ export default function MandatoryExpenseGate() {
     setBanner(null);
     try {
       const result = await validateGate(buildSnapshot(profile, values));
-      unlockDashboard(values, result.analysis);
+      unlockDashboard(values, result.analysis, 'server');
     } catch (error) {
-      if (error instanceof ApiError && error.status === 422) {
-        const mapped = mapServerErrors(error.fields);
+      if (error instanceof OfflineError) {
+        // The API is absent/unreachable (e.g. GitHub Pages answers 405). Every rule above already
+        // passed client-side, so the gate unlocks locally instead of trapping the user.
+        unlockOffline(error.reason);
+      } else if (error instanceof ApiError && error.status === 422) {
+        const mapped = mapServerErrors(error.fields, values);
         setServerErrors(mapped);
-        setAttempted(Object.fromEntries(GATE_STEPS.map((s) => [s.key, true])));
-        const firstStep = GATE_STEPS.findIndex((s) => s.fields.some((key) => mapped[key]));
+        setAttempted(Object.fromEntries(steps.map((s) => [s.key, true])));
+        const firstStep = steps.findIndex((s) => Object.keys(mapped).some((key) => stepOwnsError(s, key)));
         if (firstStep >= 0) goTo(firstStep);
         setBanner({ tone: 'warning', message: error.message });
       } else {
@@ -106,18 +136,22 @@ export default function MandatoryExpenseGate() {
   };
 
   const next = () => {
-    const invalid = step.fields.filter((key) => liveErrors[key] || serverErrors[key]);
+    const invalid = stepErrorKeys(step);
     if (invalid.length) {
-      block(invalid, missingMessage(invalid));
+      blockOn(invalid);
       return;
     }
     if (isLast) submit();
     else goTo(stepIndex + 1);
   };
 
-  const canJumpTo = (index) => index <= stepIndex || GATE_STEPS.slice(0, index).every(stepIsValid);
-  const totals = previewTotals(values);
-  const suggestedReserve = Math.max(100, Math.round((Number(values.income) || 0) * track.minUnexpectedShare));
+  const canJumpTo = (index) => index <= stepIndex || steps.slice(0, index).every(stepIsValid);
+  const totals = previewTotals(values, profile);
+  const suggestedReserve = (() => {
+    const { reserveBoostPerChild, reserveBoostMax } = CATALOG.children;
+    const boost = profile.hasChildren ? Math.min(profile.childrenCount * reserveBoostPerChild, reserveBoostMax) : 0;
+    return Math.max(100, Math.round((Number(values.income) || 0) * (track.minUnexpectedShare + boost)));
+  })();
   const StepIcon = step.icon;
 
   return (
@@ -132,19 +166,19 @@ export default function MandatoryExpenseGate() {
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy/[0.08]">
             <motion.div
               className="h-full rounded-full bg-gradient-to-l from-turquoise to-mint"
-              animate={{ width: `${(completedFields / ALL_FIELDS.length) * 100}%` }}
+              animate={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
               transition={{ duration: 0.4 }}
             />
           </div>
         </div>
         <span className="text-sm font-bold tabular-nums text-navy-soft">
-          {completedFields}/{ALL_FIELDS.length}
+          {progress.done}/{progress.total}
         </span>
       </div>
 
       {/* Sub-step tabs */}
-      <nav aria-label="שלבי הנתונים" className="mb-8 grid grid-cols-4 gap-2">
-        {GATE_STEPS.map((s, i) => {
+      <nav aria-label="שלבי הנתונים" className="mb-8 flex gap-1.5 overflow-x-auto pb-1 sm:grid sm:overflow-visible" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+        {steps.map((s, i) => {
           const done = i < stepIndex && stepIsValid(s);
           const current = i === stepIndex;
           const Icon = s.icon;
@@ -155,7 +189,8 @@ export default function MandatoryExpenseGate() {
               disabled={!canJumpTo(i)}
               onClick={() => goTo(i)}
               aria-current={current ? 'step' : undefined}
-              className={`flex flex-col items-center gap-1.5 rounded-2xl px-1 py-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:flex-row sm:justify-center sm:text-sm ${
+              aria-label={s.title}
+              className={`flex shrink-0 flex-col items-center gap-1.5 rounded-2xl px-2 py-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 lg:flex-row lg:justify-center ${
                 current ? 'bg-turquoise/10 text-turquoise-dark' : done ? 'text-navy' : 'text-navy-soft hover:bg-mist'
               }`}
             >
@@ -166,7 +201,7 @@ export default function MandatoryExpenseGate() {
               >
                 {done ? <Check size={14} strokeWidth={3} /> : <Icon size={14} />}
               </span>
-              <span className="truncate">{s.title.replace('?', '')}</span>
+              <span className="hidden truncate sm:inline">{s.tab}</span>
             </button>
           );
         })}
@@ -194,30 +229,50 @@ export default function MandatoryExpenseGate() {
               </span>
               <div>
                 <p className="text-sm font-bold text-turquoise-dark">
-                  שלב {stepIndex + 1} מתוך {GATE_STEPS.length}
+                  שלב {stepIndex + 1} מתוך {steps.length}
                 </p>
                 <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">{step.title}</h1>
-                <p className="mt-1 text-navy-soft">{step.subtitle}</p>
+                <p className="mt-1 text-navy-soft">
+                  {step.key === 'children'
+                    ? `${step.subtitle} (${profile.childrenCount === 1 ? 'ילד אחד' : `${profile.childrenCount} ילדים`})`
+                    : step.subtitle}
+                </p>
               </div>
             </div>
 
-            <div className={`mt-8 grid gap-5 ${step.fields.length > 1 ? 'sm:grid-cols-2' : ''}`}>
-              {step.fields.map((key) => (
-                <MoneyInput
-                  key={key}
-                  ref={(node) => {
-                    inputRefs.current[key] = node;
-                  }}
-                  label={FIELDS[key].label}
-                  hint={key === 'unexpected' ? `המלצה ל${track.name}: לפחות ${formatCurrency(suggestedReserve)} בחודש.` : HINTS[key]}
-                  value={values[key]}
-                  error={visibleError(key)}
+            <div className="mt-8">
+              {step.isCustomList ? (
+                <CustomExpensesEditor
+                  items={values.custom}
+                  onChange={setCustom}
+                  errorFor={visibleError}
+                  onBlurField={markTouched}
                   shakeSignal={shakeSignal}
-                  large={step.fields.length === 1}
-                  onChange={(value) => setValue(key, value)}
-                  onBlur={() => setTouched((prev) => ({ ...prev, [key]: true }))}
+                  registerRef={refs}
+                  listError={visibleError('custom')}
                 />
-              ))}
+              ) : (
+                <div className={`grid gap-5 ${step.fields.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+                  {step.fields.map((key) => (
+                    <MoneyInput
+                      key={key}
+                      ref={(node) => refs.set(key, node)}
+                      label={FIELDS[key].label}
+                      hint={
+                        key === 'unexpected'
+                          ? `המלצה ל${track.name}${profile.hasChildren ? ' עם ילדים' : ''}: לפחות ${formatCurrency(suggestedReserve)} בחודש.`
+                          : HINTS[key]
+                      }
+                      value={values[key]}
+                      error={visibleError(key)}
+                      shakeSignal={shakeSignal}
+                      large={step.fields.length === 1}
+                      onChange={(value) => setValue(key, value)}
+                      onBlur={() => markTouched(key)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
             {isLast && (
@@ -271,7 +326,7 @@ export default function MandatoryExpenseGate() {
               </>
             ) : (
               <>
-                המשך <ArrowLeft size={18} />
+                {step.isCustomList && values.custom.length === 0 ? 'אין לי, המשך' : 'המשך'} <ArrowLeft size={18} />
               </>
             )}
           </Button>

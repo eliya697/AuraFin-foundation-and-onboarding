@@ -24,6 +24,11 @@ class Catalog:
     tracks: dict[str, Track]
     field_labels: dict[str, str]
     max_amount: float
+    max_children: int
+    reserve_boost_per_child: float
+    reserve_boost_max: float
+    max_custom_expenses: int
+    max_custom_title_length: int
 
 
 @lru_cache
@@ -45,4 +50,9 @@ def get_catalog() -> Catalog:
         },
         field_labels={key: spec["label"] for key, spec in raw["fields"].items()},
         max_amount=raw["maxAmount"],
+        max_children=raw["children"]["maxCount"],
+        reserve_boost_per_child=raw["children"]["reserveBoostPerChild"],
+        reserve_boost_max=raw["children"]["reserveBoostMax"],
+        max_custom_expenses=raw["customExpenses"]["maxItems"],
+        max_custom_title_length=raw["customExpenses"]["maxTitleLength"],
     )

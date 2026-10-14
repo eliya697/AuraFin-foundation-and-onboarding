@@ -110,6 +110,11 @@ def build_mock_plan(snapshot: FinancialSnapshot, analysis: BudgetAnalysis) -> Co
             f"ויעד המסלול הוא {_money(analysis.savings_goal)} — חסרים {_money(-analysis.savings_gap)}."
         )
 
+    if analysis.children_count:
+        picture += (
+            f" עם {analysis.children_count} ילדים, כרית הבלת\"מים המומלצת היא לפחות {_money(analysis.reserve_target)} בחודש."
+        )
+
     markdown = f"""## התמונה הכוללת
 {picture}
 

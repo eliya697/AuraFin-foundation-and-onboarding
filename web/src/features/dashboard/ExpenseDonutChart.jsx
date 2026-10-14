@@ -9,7 +9,15 @@ const SEGMENTS = [
   { key: 'variable', label: 'משתנות', detail: 'אוכל בחוץ וקניות', from: '#00C4CC', to: '#5BE3E8' },
   { key: 'entertainment', label: 'בילויים', detail: 'פנאי ויציאות', from: '#1F4FD1', to: '#6A8CF0' },
   { key: 'unexpected', label: 'בלת"מים', detail: 'כרית להפתעות', from: '#00D987', to: '#00F299' },
+  { key: 'children', label: 'ילדים', detail: 'גן, חוגים וצרכים', from: '#0B6E99', to: '#3FA7D6' },
+  { key: 'custom', label: 'אישיות', detail: 'הוצאות שהוספתם', from: '#7C8DB5', to: '#B3BFDA' },
 ];
+
+function customDetail(items) {
+  if (!items?.length) return 'הוצאות שהוספתם';
+  const titles = items.map((item) => item.title.trim()).filter(Boolean);
+  return titles.length > 2 ? `${titles.slice(0, 2).join(', ')} ועוד ${titles.length - 2}` : titles.join(', ');
+}
 
 function DonutTooltip({ active, payload, total }) {
   if (!active || !payload?.length) return null;
@@ -24,9 +32,14 @@ function DonutTooltip({ active, payload, total }) {
   );
 }
 
-export default function ExpenseDonutChart({ breakdown }) {
+export default function ExpenseDonutChart({ breakdown, customItems = [] }) {
   const [activeIndex, setActiveIndex] = useState(null);
-  const data = SEGMENTS.map((segment) => ({ ...segment, value: breakdown[segment.key] }));
+  // Segments with no spending (e.g. no children, no custom items) are left out of the chart.
+  const data = SEGMENTS.map((segment) => ({
+    ...segment,
+    detail: segment.key === 'custom' ? customDetail(customItems) : segment.detail,
+    value: breakdown[segment.key] ?? 0,
+  })).filter((segment) => segment.value > 0);
   const total = data.reduce((sum, d) => sum + d.value, 0);
   const active = activeIndex === null ? null : data[activeIndex];
 

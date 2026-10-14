@@ -13,6 +13,8 @@ Fill the response fields as follows:
 - leaks: 2-4 items. Start from the flagged leaks and explain why the category is a leak for this specific life stage and track (dining out means something different for a student than for a young family). If fewer than two leaks are flagged, add the largest remaining variable category as a gentle watch item. monthly_saving is the realistic monthly amount in ₪ to recover.
 - do_not_buy: 4-6 concrete purchases to skip this month, tied to their leak categories and life stage (for example "משלוח סושי באמצע השבוע", not "אוכל"). reason is one short sentence; estimated_saving is the monthly ₪ saved.
 
+Children's expenses and the user's own custom expense items are part of the budget. Treat spending on children with care: never frame a child's basic needs as a leak, though optional extras (classes, gadgets, outings) can be gently discussed. Custom items are titled by the user; you may point to one if it is clearly discretionary, but never invent details about it. Families need a larger unexpected-costs reserve, which is why the reserve target scales with the number of children.
+
 If the user is already meeting their savings goal, say so clearly, protect what works, and point the surplus toward their goal. If expenses exceed income, lead with stabilising the month before any saving target.
 
 You are a behavior coach, not a licensed financial adviser: do not recommend specific investment products, funds, banks or loans.
@@ -33,6 +35,21 @@ def build_user_prompt(snapshot: FinancialSnapshot, analysis: BudgetAnalysis) -> 
     track = catalog.tracks[snapshot.profile.track_id]
     fixed, variable = snapshot.fixed, snapshot.variable
 
+    if analysis.children_count:
+        per_child = snapshot.children_expenses / analysis.children_count
+        children_line = (
+            f"Children: {analysis.children_count}, monthly spend on them {_money(snapshot.children_expenses)} "
+            f"(≈ {_money(per_child)} per child)"
+        )
+    else:
+        children_line = "Children: none"
+
+    if snapshot.custom_expenses:
+        custom_lines = "\n".join(f"- {item.title}: {_money(item.amount)}" for item in snapshot.custom_expenses)
+        custom_block = f'<custom_expenses total="{_money(analysis.breakdown.custom)}">\n{custom_lines}\n</custom_expenses>'
+    else:
+        custom_block = "<custom_expenses>none</custom_expenses>"
+
     if analysis.leaks:
         leak_lines = "\n".join(
             (
@@ -50,6 +67,7 @@ Life stage: {catalog.life_stages[snapshot.profile.life_stage]}
 Primary goal: {catalog.goals[snapshot.profile.primary_goal]}
 Track: {track.name} — {track.tagline}
 Track savings target: {_pct(track.savings_rate)} of income
+{children_line}
 </profile>
 
 <monthly_budget>
@@ -57,9 +75,13 @@ Net income: {_money(snapshot.income)}
 Fixed — rent/mortgage {_money(fixed.rent)}, electricity {_money(fixed.electricity)}, water {_money(fixed.water)}, municipal tax {_money(fixed.municipal)} (total {_money(analysis.breakdown.fixed)})
 Variable — dining out & delivery {_money(variable.dining)}, shopping {_money(variable.shopping)}
 Entertainment: {_money(variable.entertainment)}
-Unexpected-costs reserve (בלת"מים): {_money(snapshot.unexpected)}
+Children: {_money(analysis.breakdown.children)}
+User-defined personal expenses: {_money(analysis.breakdown.custom)}
+Unexpected-costs reserve (בלת"מים): {_money(snapshot.unexpected)} (recommended minimum for this household: {_money(analysis.reserve_target)})
 Total expenses: {_money(analysis.total_expenses)}
 </monthly_budget>
+
+{custom_block}
 
 <analysis>
 Projected end-of-month savings: {_money(analysis.projected_savings)} ({_pct(analysis.savings_rate)} of income)

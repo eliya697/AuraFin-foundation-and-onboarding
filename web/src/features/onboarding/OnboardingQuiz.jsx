@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Target } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Baby, Minus, Plus, Target, UserRound } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
 import OptionCard from '../../components/ui/OptionCard.jsx';
 import { GOALS, LIFE_STAGES, recommendTracks } from '../../lib/catalog.js';
-import { formatPercent } from '../../lib/budget.js';
+import { MAX_CHILDREN, formatPercent } from '../../lib/budget.js';
 
 const QUESTIONS = [
-  { key: 'lifeStage', eyebrow: 'שאלה 1 מתוך 2', title: 'מי אתם?', subtitle: 'נתאים את הרף לשלב בחיים שלכם.' },
-  { key: 'goal', eyebrow: 'שאלה 2 מתוך 2', title: 'מה המטרה העיקרית?', subtitle: 'אפשר לשנות בהמשך. בחרו את מה שהכי בוער.' },
+  { key: 'lifeStage', eyebrow: 'שאלה 1 מתוך 3', title: 'מי אתם?', subtitle: 'נתאים את הרף לשלב בחיים שלכם.' },
+  { key: 'goal', eyebrow: 'שאלה 2 מתוך 3', title: 'מה המטרה העיקרית?', subtitle: 'אפשר לשנות בהמשך. בחרו את מה שהכי בוער.' },
+  { key: 'children', eyebrow: 'שאלה 3 מתוך 3', title: 'יש לכם ילדים?', subtitle: 'ילדים משנים את התקציב — ואת גודל הכרית שכדאי לשמור בצד.' },
   { key: 'trackId', eyebrow: 'המסלול שלכם', title: 'בחרו מסלול', subtitle: 'לפי התשובות שלכם, זה המסלול שאנחנו ממליצים עליו.' },
 ];
 
@@ -20,33 +21,102 @@ const slide = {
   exit: (dir) => ({ opacity: 0, y: -12, x: dir > 0 ? 24 : -24 }),
 };
 
+function isAnswered(key, answers) {
+  if (key === 'children') {
+    if (answers.hasChildren === false) return true;
+    return answers.hasChildren === true && answers.childrenCount >= 1 && answers.childrenCount <= MAX_CHILDREN;
+  }
+  return Boolean(answers[key]);
+}
+
+function ChildrenCounter({ value, onChange }) {
+  const clamp = (n) => Math.min(MAX_CHILDREN, Math.max(1, n));
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      className="overflow-hidden"
+    >
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-mist p-5">
+        <label htmlFor="children-count" className="font-bold text-navy">
+          כמה ילדים?
+        </label>
+        <div className="flex items-center gap-3">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onChange(clamp(value - 1))}
+            disabled={value <= 1}
+            aria-label="פחות ילדים"
+            className="grid h-11 w-11 place-items-center rounded-2xl border border-navy/10 bg-white text-navy shadow-sm disabled:opacity-40"
+          >
+            <Minus size={18} />
+          </motion.button>
+          <input
+            id="children-count"
+            inputMode="numeric"
+            value={value}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, '');
+              onChange(digits === '' ? 0 : clamp(Number(digits)));
+            }}
+            className="w-16 rounded-2xl border-2 border-navy/10 bg-white py-2 text-center text-2xl font-extrabold tabular-nums text-navy outline-none focus:border-turquoise"
+          />
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
+            onClick={() => onChange(clamp(value + 1))}
+            disabled={value >= MAX_CHILDREN}
+            aria-label="יותר ילדים"
+            className="grid h-11 w-11 place-items-center rounded-2xl bg-turquoise text-white shadow-sm disabled:opacity-40"
+          >
+            <Plus size={18} />
+          </motion.button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function OnboardingQuiz({ initialProfile, onComplete }) {
   const [answers, setAnswers] = useState({
     lifeStage: initialProfile?.lifeStage ?? null,
     goal: initialProfile?.goal ?? null,
+    hasChildren: typeof initialProfile?.hasChildren === 'boolean' ? initialProfile.hasChildren : null,
+    childrenCount: initialProfile?.childrenCount || 1,
     trackId: initialProfile?.trackId ?? null,
   });
   const [[step, direction], setStep] = useState([0, 1]);
   const question = QUESTIONS[step];
 
   const go = (delta) => setStep(([current]) => [current + delta, delta]);
+  const advanceFrom = (from) =>
+    // Advance only if still on the same question (guards against double taps).
+    setTimeout(() => setStep(([current, dir]) => (current === from ? [current + 1, 1] : [current, dir])), AUTO_ADVANCE_MS);
 
   const answer = (key, value) => {
     setAnswers((prev) => ({
       ...prev,
       [key]: value,
-      // Changing the profile invalidates a previously chosen track.
-      ...(key !== 'trackId' && prev[key] !== value ? { trackId: null } : {}),
+      // Changing the profile changes the recommendations, so a chosen track is reset.
+      ...(key !== 'trackId' && key !== 'childrenCount' && prev[key] !== value ? { trackId: null } : {}),
     }));
-    if (key !== 'trackId') {
-      const from = step;
-      // Advance only if still on the same question (guards against double taps).
-      setTimeout(() => setStep(([current, dir]) => (current === from ? [current + 1, 1] : [current, dir])), AUTO_ADVANCE_MS);
-    }
+    if (key === 'lifeStage' || key === 'goal' || (key === 'hasChildren' && value === false)) advanceFrom(step);
   };
 
-  const tracks = answers.lifeStage && answers.goal ? recommendTracks(answers.lifeStage, answers.goal) : [];
-  const canContinue = Boolean(answers[question.key]);
+  const finish = () =>
+    onComplete({
+      lifeStage: answers.lifeStage,
+      goal: answers.goal,
+      hasChildren: answers.hasChildren,
+      childrenCount: answers.hasChildren ? answers.childrenCount : 0,
+      trackId: answers.trackId,
+    });
+
+  const tracks = answers.lifeStage && answers.goal ? recommendTracks(answers.lifeStage, answers.goal, answers.hasChildren) : [];
+  const canContinue = isAnswered(question.key, answers);
+  const isLast = step === QUESTIONS.length - 1;
 
   return (
     <div>
@@ -110,6 +180,33 @@ export default function OnboardingQuiz({ initialProfile, onComplete }) {
               </div>
             )}
 
+            {question.key === 'children' && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <OptionCard
+                    icon={Baby}
+                    title="כן, יש ילדים"
+                    description="נוסיף שלב קצר להוצאות עליהם"
+                    selected={answers.hasChildren === true}
+                    onSelect={() => answer('hasChildren', true)}
+                  />
+                  <OptionCard
+                    icon={UserRound}
+                    title="לא"
+                    description="ממשיכים הלאה"
+                    selected={answers.hasChildren === false}
+                    onSelect={() => answer('hasChildren', false)}
+                    delay={0.06}
+                  />
+                </div>
+                <AnimatePresence>
+                  {answers.hasChildren === true && (
+                    <ChildrenCounter value={answers.childrenCount} onChange={(n) => answer('childrenCount', n)} />
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+
             {question.key === 'trackId' && (
               <div className="grid gap-5 pt-3 md:grid-cols-3">
                 {tracks.map((track, i) => (
@@ -141,12 +238,8 @@ export default function OnboardingQuiz({ initialProfile, onComplete }) {
             <ArrowRight size={18} />
           </Button>
         )}
-        <Button
-          className="flex-1 sm:flex-none sm:px-10"
-          disabled={!canContinue}
-          onClick={() => (step < QUESTIONS.length - 1 ? go(1) : onComplete(answers))}
-        >
-          {step < QUESTIONS.length - 1 ? 'המשך' : 'זה המסלול שלי'}
+        <Button className="flex-1 sm:flex-none sm:px-10" disabled={!canContinue} onClick={() => (isLast ? finish() : go(1))}>
+          {isLast ? 'זה המסלול שלי' : 'המשך'}
           <ArrowLeft size={18} />
         </Button>
         {question.key === 'trackId' && !answers.trackId && (

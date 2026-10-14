@@ -1,4 +1,4 @@
-import { PencilLine, RotateCcw, Target, Wallet, Receipt } from 'lucide-react';
+import { Baby, CloudOff, PencilLine, RotateCcw, Target, Wallet, Receipt } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Logo from '../../components/ui/Logo.jsx';
@@ -27,6 +27,7 @@ function Stat({ icon: Icon, label, value, delay }) {
 export default function Dashboard() {
   const { state, reopenGate, restart } = useJourney();
   const analysis = state.unlock.analysis;
+  const offline = state.unlock.mode === 'offline';
   const lifeStage = LIFE_STAGES.find((s) => s.id === state.profile.lifeStage);
   const goal = GOALS.find((g) => g.id === state.profile.goal);
 
@@ -53,6 +54,22 @@ export default function Dashboard() {
           {lifeStage.label} · {goal.label}
         </p>
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-navy sm:text-4xl">{analysis.track_name}</h1>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {analysis.children_count > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5 text-sm font-semibold text-navy">
+              <Baby size={15} className="text-turquoise-dark" />
+              {analysis.children_count === 1 ? 'ילד אחד' : `${analysis.children_count} ילדים`} · {formatCurrency(analysis.breakdown.children)} בחודש
+            </span>
+          )}
+          {offline && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-800"
+              title="השרת לא היה זמין, ולכן הנתונים אומתו ונותחו במכשיר שלכם."
+            >
+              <CloudOff size={15} /> מצב לא מקוון · אומת במכשיר
+            </span>
+          )}
+        </div>
       </Reveal>
 
       <div className="mb-5 grid grid-cols-3 gap-3 sm:gap-5">
@@ -63,7 +80,7 @@ export default function Dashboard() {
 
       <div className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
         <SavingsGoalMetric analysis={analysis} />
-        <ExpenseDonutChart breakdown={analysis.breakdown} />
+        <ExpenseDonutChart breakdown={analysis.breakdown} customItems={state.budget.custom} />
       </div>
 
       <AISavingsPlanView />

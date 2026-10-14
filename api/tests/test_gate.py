@@ -11,11 +11,35 @@ from app.config import get_settings
 from app.main import create_app
 
 VALID = {
-    "profile": {"life_stage": "student", "primary_goal": "safety_net", "track_id": "student_smart"},
+    "profile": {
+        "life_stage": "student",
+        "primary_goal": "safety_net",
+        "track_id": "student_smart",
+        "has_children": False,
+        "children_count": 0,
+    },
     "income": 7000,
     "fixed": {"rent": 2200, "electricity": 180, "water": 60, "municipal": 150},
     "variable": {"entertainment": 450, "dining": 1100, "shopping": 500},
     "unexpected": 300,
+    "children_expenses": 0,
+    "custom_expenses": [],
+}
+
+FAMILY = {
+    "profile": {
+        "life_stage": "young_family",
+        "primary_goal": "house",
+        "track_id": "family_shield",
+        "has_children": True,
+        "children_count": 2,
+    },
+    "income": 20000,
+    "fixed": {"rent": 6000, "electricity": 400, "water": 150, "municipal": 500},
+    "variable": {"entertainment": 600, "dining": 900, "shopping": 1200},
+    "unexpected": 1000,
+    "children_expenses": 3200,
+    "custom_expenses": [{"title": "חדר כושר", "amount": 250}, {"title": "  ביטוח רכב  ", "amount": 450}],
 }
 
 
@@ -56,7 +80,19 @@ def test_complete_snapshot_unlocks_gate(client):
 
 @pytest.mark.parametrize(
     "path",
-    ["income", "unexpected", "fixed.rent", "fixed.municipal", "variable.dining", "variable.entertainment", "profile.track_id"],
+    [
+        "income",
+        "unexpected",
+        "fixed.rent",
+        "fixed.municipal",
+        "variable.dining",
+        "variable.entertainment",
+        "profile.track_id",
+        "profile.has_children",
+        "profile.children_count",
+        "children_expenses",
+        "custom_expenses",
+    ],
 )
 def test_missing_field_blocks_gate(client, path):
     response = client.post("/api/gate/validate", json=without(path))
@@ -158,3 +194,95 @@ def test_claude_request_shape(client):
 def test_missing_income_message_does_not_suggest_zero(client):
     message = fields(client.post("/api/gate/validate", json=without("income")))["income"]
     assert "כתבו 0" not in message
+
+
+# ── Children ──────────────────────────────────────────────────────────────────
+
+
+def test_family_snapshot_totals_include_children_and_custom(client):
+    analysis = client.post("/api/gate/validate", json=FAMILY).json()["analysis"]
+    assert analysis["breakdown"]["children"] == 3200
+    assert analysis["breakdown"]["custom"] == 700
+    assert analysis["total_expenses"] == 14650  # 7050 + 2100 + 600 + 1000 + 3200 + 700
+    assert analysis["projected_savings"] == 5350
+    assert analysis["children_count"] == 2
+
+
+def test_children_raise_the_reserve_target(client):
+    # family_shield min 6% + 2 children x 1% = 8% of 20,000 = 1,600 > 1,000 entered
+    analysis = client.post("/api/gate/validate", json=FAMILY).json()["analysis"]
+    assert analysis["reserve_target"] == 1600
+    reserve = next(leak for leak in analysis["leaks"] if leak["category"] == "unexpected")
+    assert reserve["kind"] == "under_reserved"
+    assert reserve["benchmark_share"] == 0.08
+    assert reserve["excess_amount"] == 600
+
+
+def test_children_reserve_boost_is_capped(client):
+    payload = copy.deepcopy(FAMILY)
+    payload["profile"]["children_count"] = 9
+    analysis = client.post("/api/gate/validate", json=payload).json()["analysis"]
+    assert analysis["reserve_target"] == 2000  # 6% + capped 4% = 10%
+
+
+def test_has_children_requires_count(client):
+    payload = copy.deepcopy(FAMILY)
+    payload["profile"]["children_count"] = 0
+    assert "profile.children_count" in fields(client.post("/api/gate/validate", json=payload))
+
+
+def test_has_children_requires_children_expenses(client):
+    payload = copy.deepcopy(FAMILY)
+    payload["children_expenses"] = 0
+    found = fields(client.post("/api/gate/validate", json=payload))
+    assert "ילדים" in found["children_expenses"]
+
+
+def test_no_children_rejects_children_data(client):
+    payload = copy.deepcopy(VALID)
+    payload["profile"]["children_count"] = 2
+    payload["children_expenses"] = 500
+    found = fields(client.post("/api/gate/validate", json=payload))
+    assert "profile.children_count" in found
+
+
+def test_children_count_must_be_integer(client):
+    payload = copy.deepcopy(FAMILY)
+    payload["profile"]["children_count"] = 1.5
+    assert "profile.children_count" in fields(client.post("/api/gate/validate", json=payload))
+
+
+# ── Custom expenses ───────────────────────────────────────────────────────────
+
+
+def test_custom_expense_needs_title(client):
+    payload = copy.deepcopy(FAMILY)
+    payload["custom_expenses"][1]["title"] = "   "
+    found = fields(client.post("/api/gate/validate", json=payload))
+    assert "custom_expenses.1.title" in found
+
+
+def test_custom_expense_amount_must_be_positive(client):
+    payload = copy.deepcopy(FAMILY)
+    payload["custom_expenses"][0]["amount"] = 0
+    assert "custom_expenses.0.amount" in fields(client.post("/api/gate/validate", json=payload))
+
+
+def test_custom_expense_title_length_and_count_limits(client):
+    payload = copy.deepcopy(VALID)
+    payload["custom_expenses"] = [{"title": "x" * 41, "amount": 10}]
+    assert "custom_expenses.0.title" in fields(client.post("/api/gate/validate", json=payload))
+    payload["custom_expenses"] = [{"title": f"item {i}", "amount": 10} for i in range(21)]
+    assert "custom_expenses" in fields(client.post("/api/gate/validate", json=payload))
+
+
+def test_custom_items_reach_the_prompt(client):
+    from app.analysis import analyze
+    from app.prompts import build_user_prompt
+    from app.schemas import FinancialSnapshot
+
+    snapshot = FinancialSnapshot.model_validate(FAMILY)
+    prompt = build_user_prompt(snapshot, analyze(snapshot))
+    assert "- ביטוח רכב: ₪450" in prompt  # title is whitespace-stripped
+    assert "Children: 2" in prompt
+    assert "recommended minimum for this household: ₪1,600" in prompt

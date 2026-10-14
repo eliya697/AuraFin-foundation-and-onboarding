@@ -1,0 +1,346 @@
+[
+  {
+    "name": "student_with_leaks",
+    "snapshot": {
+      "profile": {
+        "life_stage": "student",
+        "primary_goal": "safety_net",
+        "track_id": "student_smart",
+        "has_children": false,
+        "children_count": 0
+      },
+      "income": 7000,
+      "fixed": {
+        "rent": 2200,
+        "electricity": 180,
+        "water": 60,
+        "municipal": 150
+      },
+      "variable": {
+        "entertainment": 450,
+        "dining": 1100,
+        "shopping": 500
+      },
+      "unexpected": 300,
+      "children_expenses": 0,
+      "custom_expenses": []
+    },
+    "expected": {
+      "track_id": "student_smart",
+      "track_name": "מסלול סטודנט חכם",
+      "total_expenses": 4940.0,
+      "projected_savings": 2060.0,
+      "savings_rate": 0.2943,
+      "savings_goal": 700.0,
+      "savings_gap": 1360.0,
+      "on_track": true,
+      "children_count": 0,
+      "reserve_target": 210.0,
+      "breakdown": {
+        "fixed": 2590.0,
+        "variable": 1600.0,
+        "entertainment": 450.0,
+        "unexpected": 300.0,
+        "children": 0.0,
+        "custom": 0.0
+      },
+      "leaks": [
+        {
+          "category": "dining",
+          "label": "אוכל בחוץ ומשלוחים",
+          "amount": 1100.0,
+          "share_of_income": 0.1571,
+          "benchmark_share": 0.06,
+          "excess_amount": 680.0,
+          "kind": "overspend"
+        },
+        {
+          "category": "entertainment",
+          "label": "בילויים ופנאי",
+          "amount": 450.0,
+          "share_of_income": 0.0643,
+          "benchmark_share": 0.05,
+          "excess_amount": 100.0,
+          "kind": "overspend"
+        },
+        {
+          "category": "shopping",
+          "label": "קניות",
+          "amount": 500.0,
+          "share_of_income": 0.0714,
+          "benchmark_share": 0.06,
+          "excess_amount": 80.0,
+          "kind": "overspend"
+        }
+      ]
+    }
+  },
+  {
+    "name": "family_two_kids_under_reserved",
+    "snapshot": {
+      "profile": {
+        "life_stage": "young_family",
+        "primary_goal": "house",
+        "track_id": "family_shield",
+        "has_children": true,
+        "children_count": 2
+      },
+      "income": 20000,
+      "fixed": {
+        "rent": 6000,
+        "electricity": 400,
+        "water": 150,
+        "municipal": 500
+      },
+      "variable": {
+        "entertainment": 600,
+        "dining": 900,
+        "shopping": 1200
+      },
+      "unexpected": 1000,
+      "children_expenses": 3200,
+      "custom_expenses": [
+        {
+          "title": "חדר כושר",
+          "amount": 250
+        },
+        {
+          "title": "ביטוח רכב",
+          "amount": 450
+        }
+      ]
+    },
+    "expected": {
+      "track_id": "family_shield",
+      "track_name": "מסלול משפחה מוגנת",
+      "total_expenses": 14650.0,
+      "projected_savings": 5350.0,
+      "savings_rate": 0.2675,
+      "savings_goal": 2400.0,
+      "savings_gap": 2950.0,
+      "on_track": true,
+      "children_count": 2,
+      "reserve_target": 1600.0,
+      "breakdown": {
+        "fixed": 7050.0,
+        "variable": 2100.0,
+        "entertainment": 600.0,
+        "unexpected": 1000.0,
+        "children": 3200.0,
+        "custom": 700.0
+      },
+      "leaks": [
+        {
+          "category": "unexpected",
+          "label": "בלת\"מים",
+          "amount": 1000.0,
+          "share_of_income": 0.05,
+          "benchmark_share": 0.08,
+          "excess_amount": 600.0,
+          "kind": "under_reserved"
+        }
+      ]
+    }
+  },
+  {
+    "name": "debt_overspending",
+    "snapshot": {
+      "profile": {
+        "life_stage": "employee",
+        "primary_goal": "debt",
+        "track_id": "debt_breaker",
+        "has_children": true,
+        "children_count": 1
+      },
+      "income": 9000,
+      "fixed": {
+        "rent": 4200,
+        "electricity": 300,
+        "water": 100,
+        "municipal": 350
+      },
+      "variable": {
+        "entertainment": 900,
+        "dining": 1600,
+        "shopping": 1400
+      },
+      "unexpected": 200,
+      "children_expenses": 1500,
+      "custom_expenses": [
+        {
+          "title": "החזר הלוואה",
+          "amount": 1200
+        }
+      ]
+    },
+    "expected": {
+      "track_id": "debt_breaker",
+      "track_name": "מסלול שובר החובות",
+      "total_expenses": 11750.0,
+      "projected_savings": -2750.0,
+      "savings_rate": -0.3056,
+      "savings_goal": 1800.0,
+      "savings_gap": -4550.0,
+      "on_track": false,
+      "children_count": 1,
+      "reserve_target": 360.0,
+      "breakdown": {
+        "fixed": 4950.0,
+        "variable": 3000.0,
+        "entertainment": 900.0,
+        "unexpected": 200.0,
+        "children": 1500.0,
+        "custom": 1200.0
+      },
+      "leaks": [
+        {
+          "category": "dining",
+          "label": "אוכל בחוץ ומשלוחים",
+          "amount": 1600.0,
+          "share_of_income": 0.1778,
+          "benchmark_share": 0.03,
+          "excess_amount": 1330.0,
+          "kind": "overspend"
+        },
+        {
+          "category": "shopping",
+          "label": "קניות",
+          "amount": 1400.0,
+          "share_of_income": 0.1556,
+          "benchmark_share": 0.03,
+          "excess_amount": 1130.0,
+          "kind": "overspend"
+        },
+        {
+          "category": "entertainment",
+          "label": "בילויים ופנאי",
+          "amount": 900.0,
+          "share_of_income": 0.1,
+          "benchmark_share": 0.03,
+          "excess_amount": 630.0,
+          "kind": "overspend"
+        },
+        {
+          "category": "unexpected",
+          "label": "בלת\"מים",
+          "amount": 200.0,
+          "share_of_income": 0.0222,
+          "benchmark_share": 0.04,
+          "excess_amount": 160.0,
+          "kind": "under_reserved"
+        }
+      ]
+    }
+  },
+  {
+    "name": "on_track_freelancer_fractions",
+    "snapshot": {
+      "profile": {
+        "life_stage": "freelancer",
+        "primary_goal": "safety_net",
+        "track_id": "freelancer_growth",
+        "has_children": false,
+        "children_count": 0
+      },
+      "income": 13333.33,
+      "fixed": {
+        "rent": 3500.5,
+        "electricity": 222.25,
+        "water": 77.75,
+        "municipal": 410.5
+      },
+      "variable": {
+        "entertainment": 333.5,
+        "dining": 666.5,
+        "shopping": 0
+      },
+      "unexpected": 1066.67,
+      "children_expenses": 0,
+      "custom_expenses": [
+        {
+          "title": "תוכנות לעבודה",
+          "amount": 189.9
+        }
+      ]
+    },
+    "expected": {
+      "track_id": "freelancer_growth",
+      "track_name": "מסלול צמיחה לעצמאים",
+      "total_expenses": 6468.0,
+      "projected_savings": 6866.0,
+      "savings_rate": 0.5149,
+      "savings_goal": 2667.0,
+      "savings_gap": 4199.0,
+      "on_track": true,
+      "children_count": 0,
+      "reserve_target": 1067.0,
+      "breakdown": {
+        "fixed": 4211.0,
+        "variable": 666.5,
+        "entertainment": 333.5,
+        "unexpected": 1066.67,
+        "children": 0.0,
+        "custom": 189.9
+      },
+      "leaks": []
+    }
+  },
+  {
+    "name": "many_kids_capped_boost",
+    "snapshot": {
+      "profile": {
+        "life_stage": "young_family",
+        "primary_goal": "safety_net",
+        "track_id": "family_shield",
+        "has_children": true,
+        "children_count": 7
+      },
+      "income": 24500,
+      "fixed": {
+        "rent": 7500,
+        "electricity": 900,
+        "water": 300,
+        "municipal": 700
+      },
+      "variable": {
+        "entertainment": 500,
+        "dining": 700,
+        "shopping": 2100
+      },
+      "unexpected": 2450,
+      "children_expenses": 6300,
+      "custom_expenses": []
+    },
+    "expected": {
+      "track_id": "family_shield",
+      "track_name": "מסלול משפחה מוגנת",
+      "total_expenses": 21450.0,
+      "projected_savings": 3050.0,
+      "savings_rate": 0.1245,
+      "savings_goal": 2940.0,
+      "savings_gap": 110.0,
+      "on_track": true,
+      "children_count": 7,
+      "reserve_target": 2450.0,
+      "breakdown": {
+        "fixed": 9400.0,
+        "variable": 2800.0,
+        "entertainment": 500.0,
+        "unexpected": 2450.0,
+        "children": 6300.0,
+        "custom": 0.0
+      },
+      "leaks": [
+        {
+          "category": "shopping",
+          "label": "קניות",
+          "amount": 2100.0,
+          "share_of_income": 0.0857,
+          "benchmark_share": 0.07,
+          "excess_amount": 385.0,
+          "kind": "overspend"
+        }
+      ]
+    }
+  }
+]

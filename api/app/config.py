@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     max_tokens: int = 16000
     catalog_path: Path = DEFAULT_CATALOG
-    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://eliya697.github.io"
 
     @property
     def origins(self) -> list[str]:

@@ -5,7 +5,10 @@ import { Ban, Bot, Check, CircleDot, Droplets, RefreshCw, Sparkles } from 'lucid
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { buildSnapshot, formatCurrency } from '../../lib/budget.js';
-import { fetchSavingsPlan } from '../../services/api.js';
+import { CATALOG } from '../../lib/catalog.js';
+import { analyzeBudget } from '../../lib/analysis.js';
+import { buildOfflinePlan } from '../../lib/offlinePlan.js';
+import { OfflineError, fetchSavingsPlan, hasBackend } from '../../services/api.js';
 import { fingerprintOf, useJourney } from '../../state/JourneyContext.jsx';
 
 const LOADING_STEPS = ['מנתחים את ההכנסות וההוצאות…', 'מזהים דליפות לפי המסלול שלכם…', 'בונים רשימת "לא לקנות" לחודש…', 'מנסחים את התוכנית…'];
@@ -16,7 +19,20 @@ const LEAK_LABELS = {
   entertainment: 'בילויים',
   fixed: 'קבועות',
   unexpected: 'בלת"מים',
+  children: 'ילדים',
+  custom: 'אישיות',
 };
+
+const SOURCE_BADGES = {
+  mock: 'מצב הדגמה',
+  offline: 'תוכנית מקומית · ללא שרת',
+};
+
+function buildLocalPlan(profile, budget) {
+  const snapshot = buildSnapshot(profile, budget);
+  const analysis = analyzeBudget(snapshot, CATALOG);
+  return { analysis, plan: buildOfflinePlan(snapshot, analysis, CATALOG), source: 'offline', model: null };
+}
 
 const markdownComponents = {
   h2: ({ children }) => (
@@ -153,6 +169,7 @@ export default function AISavingsPlanView() {
   const { state, storePlan } = useJourney();
   const fingerprint = fingerprintOf(state.profile, state.budget);
   const cached = state.plan?.fingerprint === fingerprint ? state.plan.data : null;
+  const offlineMode = state.unlock?.mode === 'offline' || !hasBackend;
   const [status, setStatus] = useState(cached ? 'done' : 'loading');
   const [error, setError] = useState(null);
   const abortRef = useRef(null);
@@ -163,16 +180,29 @@ export default function AISavingsPlanView() {
     abortRef.current = controller;
     setStatus('loading');
     setError(null);
+    const applyLocalPlan = () => {
+      storePlan(fingerprint, buildLocalPlan(state.profile, state.budget));
+      setStatus('done');
+    };
+    // Unlocked offline, or a static build with no backend: never hit the network.
+    if (offlineMode) {
+      applyLocalPlan();
+      return;
+    }
     try {
       const data = await fetchSavingsPlan(buildSnapshot(state.profile, state.budget), controller.signal);
       storePlan(fingerprint, data);
       setStatus('done');
     } catch (err) {
       if (err.name === 'AbortError') return;
+      if (err instanceof OfflineError) {
+        applyLocalPlan();
+        return;
+      }
       setError(err.message);
       setStatus('error');
     }
-  }, [state.profile, state.budget, fingerprint, storePlan]);
+  }, [state.profile, state.budget, fingerprint, storePlan, offlineMode]);
 
   useEffect(() => {
     if (!cached) load();
@@ -195,7 +225,9 @@ export default function AISavingsPlanView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {cached?.source === 'mock' && <span className="rounded-full bg-navy/[0.05] px-3 py-1 text-xs text-navy-soft">מצב הדגמה</span>}
+          {SOURCE_BADGES[cached?.source] && (
+            <span className="rounded-full bg-navy/[0.05] px-3 py-1 text-xs text-navy-soft">{SOURCE_BADGES[cached.source]}</span>
+          )}
           {status !== 'loading' && (
             <Button variant="ghost" size="sm" onClick={load}>
               <RefreshCw size={15} /> תוכנית חדשה
