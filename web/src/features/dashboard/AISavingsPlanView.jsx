@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Markdown from 'react-markdown';
 import { Ban, Bot, Check, CircleDot, Droplets, RefreshCw, Sparkles } from 'lucide-react';
@@ -10,6 +10,7 @@ import { analyzeBudget } from '../../lib/analysis.js';
 import { buildOfflinePlan } from '../../lib/offlinePlan.js';
 import { OfflineError, fetchSavingsPlan, hasBackend } from '../../services/api.js';
 import { fingerprintOf, useJourney } from '../../state/JourneyContext.jsx';
+import { useLastDefined } from '../../hooks/useLastDefined.js';
 
 const LOADING_STEPS = ['מנתחים את ההכנסות וההוצאות…', 'מזהים דליפות לפי המסלול שלכם…', 'בונים רשימת "לא לקנות" לחודש…', 'מנסחים את התוכנית…'];
 
@@ -86,12 +87,10 @@ function LoadingState() {
       </div>
       <div className="mt-6 space-y-3">
         {[92, 78, 85, 60].map((w, i) => (
-          <motion.div
+          <div
             key={w}
-            className="h-3.5 rounded-full bg-mist"
-            style={{ width: `${w}%` }}
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.15 }}
+            className="h-3.5 rounded-full bg-mist motion-safe:animate-pulse"
+            style={{ width: `${w}%`, animationDelay: `${i * 150}ms` }}
           />
         ))}
       </div>
@@ -99,9 +98,9 @@ function LoadingState() {
   );
 }
 
-function DoNotBuyList({ items }) {
+const DoNotBuyList = memo(function DoNotBuyList({ items }) {
   const [resisted, setResisted] = useState({});
-  const saved = items.reduce((sum, item, i) => sum + (resisted[i] ? item.estimated_saving : 0), 0);
+  const saved = items.reduce((sum, item, i) => sum + (resisted[i] ? Number(item.estimated_saving) || 0 : 0), 0);
 
   return (
     <div>
@@ -127,7 +126,7 @@ function DoNotBuyList({ items }) {
           const done = Boolean(resisted[i]);
           return (
             <motion.li
-              key={item.item}
+              key={`${item.item}-${i}`}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.06 }}
@@ -137,7 +136,7 @@ function DoNotBuyList({ items }) {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setResisted((prev) => ({ ...prev, [i]: !prev[i] }))}
                 aria-pressed={done}
-                className={`flex w-full items-center gap-3 rounded-2xl border p-3.5 text-start transition-colors ${
+                className={`flex min-h-12 w-full items-center gap-3 rounded-2xl border p-3.5 text-start transition-colors ${
                   done ? 'border-mint/50 bg-mint/10' : 'border-navy/[0.07] bg-white hover:border-turquoise/40'
                 }`}
               >
@@ -163,11 +162,17 @@ function DoNotBuyList({ items }) {
       <p className="mt-2 text-xs text-navy-soft">סמנו כל פריט שוויתרתם עליו.</p>
     </div>
   );
-}
+});
+
+const PlanMarkdown = memo(function PlanMarkdown({ markdown }) {
+  return <Markdown components={markdownComponents}>{markdown}</Markdown>;
+});
 
 export default function AISavingsPlanView() {
-  const { state, storePlan } = useJourney();
-  const fingerprint = fingerprintOf(state.profile, state.budget);
+  const { state: liveState, storePlan } = useJourney();
+  // Same exit-animation guard as the dashboard: never derive from a profile that was just cleared.
+  const state = useLastDefined(liveState.profile ? liveState : null);
+  const fingerprint = useMemo(() => fingerprintOf(state.profile, state.budget), [state.profile, state.budget]);
   const cached = state.plan?.fingerprint === fingerprint ? state.plan.data : null;
   const offlineMode = state.unlock?.mode === 'offline' || !hasBackend;
   const [status, setStatus] = useState(cached ? 'done' : 'loading');
@@ -194,12 +199,12 @@ export default function AISavingsPlanView() {
       storePlan(fingerprint, data);
       setStatus('done');
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      if (err?.name === 'AbortError' || controller.signal.aborted) return;
       if (err instanceof OfflineError) {
         applyLocalPlan();
         return;
       }
-      setError(err.message);
+      setError(err?.message ?? 'יצירת התוכנית נכשלה.');
       setStatus('error');
     }
   }, [state.profile, state.budget, fingerprint, storePlan, offlineMode]);
@@ -211,9 +216,11 @@ export default function AISavingsPlanView() {
   }, [fingerprint]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const plan = cached?.plan;
+  const leaks = Array.isArray(plan?.leaks) ? plan.leaks : [];
+  const doNotBuy = Array.isArray(plan?.do_not_buy) ? plan.do_not_buy : [];
 
   return (
-    <Card initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} padding="p-0" className="overflow-hidden">
+    <Card initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} padding="p-0" className="cv-auto overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/[0.06] bg-gradient-to-l from-turquoise/[0.08] via-white to-mint/[0.08] px-5 py-4 sm:px-7">
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-navy text-white">
@@ -221,7 +228,7 @@ export default function AISavingsPlanView() {
           </span>
           <div>
             <h2 className="font-extrabold text-navy">תוכנית החיסכון שלכם</h2>
-            <p className="text-xs text-navy-soft">נבנתה ע״י המאמן לפי {cached?.analysis.track_name ?? 'המסלול שלכם'}</p>
+            <p className="text-xs text-navy-soft">נבנתה ע״י המאמן לפי {cached?.analysis?.track_name ?? 'המסלול שלכם'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -256,7 +263,7 @@ export default function AISavingsPlanView() {
 
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
               <article>
-                <Markdown components={markdownComponents}>{plan.savings_plan_markdown}</Markdown>
+                <PlanMarkdown markdown={String(plan.savings_plan_markdown ?? '')} />
               </article>
 
               <div className="space-y-8">
@@ -265,9 +272,9 @@ export default function AISavingsPlanView() {
                     <Droplets size={18} className="text-turquoise" /> הדליפות שזיהינו
                   </h3>
                   <ul className="space-y-2.5">
-                    {plan.leaks.map((leak, i) => (
+                    {leaks.map((leak, i) => (
                       <motion.li
-                        key={`${leak.category}-${leak.title}`}
+                        key={`${leak.category}-${leak.title}-${i}`}
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 + i * 0.06 }}
@@ -289,7 +296,7 @@ export default function AISavingsPlanView() {
                     ))}
                   </ul>
                 </div>
-                <DoNotBuyList items={plan.do_not_buy} />
+                {doNotBuy.length > 0 && <DoNotBuyList items={doNotBuy} />}
               </div>
             </div>
           </motion.div>

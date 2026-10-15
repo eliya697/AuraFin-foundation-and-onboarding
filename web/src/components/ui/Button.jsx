@@ -1,28 +1,30 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 
 const BASE =
-  'group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl font-bold transition-colors disabled:cursor-not-allowed';
+  'group relative inline-flex select-none items-center justify-center gap-2 overflow-hidden rounded-2xl font-bold transition-colors disabled:cursor-not-allowed';
 
+// Every size keeps a 48×48 px minimum touch target.
 const SIZES = {
-  md: 'px-6 py-3.5 text-base',
-  sm: 'px-4 py-2.5 text-sm',
-  lg: 'px-8 py-4 text-lg',
-  icon: 'p-2.5',
+  md: 'min-h-12 px-6 py-3 text-base',
+  sm: 'min-h-12 px-4 py-2.5 text-sm',
+  lg: 'min-h-14 px-8 py-4 text-lg',
+  icon: 'h-12 w-12 shrink-0',
 };
 
 const VARIANTS = {
   primary: 'bg-turquoise text-white shadow-[var(--shadow-glow)] disabled:bg-navy/10 disabled:text-navy/35 disabled:shadow-none',
   secondary: 'bg-white text-navy border border-navy/10 hover:border-turquoise/50 hover:text-turquoise-dark disabled:text-navy/30',
-  ghost: 'bg-transparent text-navy-soft hover:bg-mist hover:text-navy',
+  ghost: 'bg-transparent text-navy-soft hover:bg-mist hover:text-navy disabled:text-navy/30',
+  danger: 'bg-danger text-white disabled:bg-navy/10 disabled:text-navy/35',
 };
 
 /** Prominent CTA: turquoise base, turquoise→mint gradient on hover, tactile scale on press. */
-export default function Button({ variant = 'primary', size = 'md', className = '', children, disabled, type = 'button', ...props }) {
+function Button({ variant = 'primary', size = 'md', className = '', children, disabled, type = 'button', ...props }) {
   return (
     <motion.button
       type={type}
       disabled={disabled}
-      whileHover={disabled ? undefined : { y: -1 }}
       whileTap={disabled ? undefined : { scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 520, damping: 28 }}
       className={`${BASE} ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
@@ -35,3 +37,5 @@ export default function Button({ variant = 'primary', size = 'md', className = '
     </motion.button>
   );
 }
+
+export default memo(Button);

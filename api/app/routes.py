@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .analysis import analyze
+from .auth import require_user
 from .coach import CoachService, CoachUnavailableError
 from .schemas import FinancialSnapshot, GateResponse, PlanResponse
 
 router = APIRouter(prefix="/api")
+# /health stays public (used to wake the host); everything else needs a session when auth is configured.
+protected = [Depends(require_user)]
 
 
 def get_coach(request: Request) -> CoachService:
@@ -16,7 +19,7 @@ async def health(request: Request) -> dict[str, str]:
     return {"status": "ok", "coach": "gemini" if request.app.state.coach_uses_ai else "mock"}
 
 
-@router.post("/gate/validate", response_model=GateResponse)
+@router.post("/gate/validate", response_model=GateResponse, dependencies=protected)
 async def validate_gate(snapshot: FinancialSnapshot) -> GateResponse:
     """The Mandatory Expense Gate. A 200 here is the only thing that unlocks the dashboard.
 
@@ -25,7 +28,7 @@ async def validate_gate(snapshot: FinancialSnapshot) -> GateResponse:
     return GateResponse(status="unlocked", analysis=analyze(snapshot))
 
 
-@router.post("/coach/plan", response_model=PlanResponse)
+@router.post("/coach/plan", response_model=PlanResponse, dependencies=protected)
 async def coach_plan(snapshot: FinancialSnapshot, coach: CoachService = Depends(get_coach)) -> PlanResponse:
     """Re-validates the full snapshot (same contract as the gate) before any AI call is made."""
     try:

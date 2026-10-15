@@ -4,9 +4,54 @@ Bright, Hebrew-first (RTL) behavioral finance coach. A mandatory journey (Welcom
 
 ```
 shared/tracks.json   Single source of truth: life stages, goals, tracks, benchmarks, field rules (read by web + api)
-web/                 React 19 + Vite + Tailwind v4 + Framer Motion + Recharts
-api/                 FastAPI: gate validation, deterministic analysis, Gemini plan generation
+web/                 React 19 + Vite + Tailwind v4 + Framer Motion + Recharts + Supabase Auth
+api/                 FastAPI: gate validation, deterministic analysis, Gemini plan generation, session check
+supabase/            SQL migrations: roles, per-user journeys, admin RPCs (RLS)
 ```
+
+## Accounts, admin and data sync
+
+Every screen sits behind sign-in (`web/src/App.jsx` → `Guarded`). Each user gets their own journey,
+stored on the device (`localStorage`, key `aurafin:v3:journey:<userId>`) **and** in Supabase
+(`public.journeys`). On start the newer copy (by `updatedAt`) wins; edits are saved locally at once and
+pushed to the cloud after a short debounce, retried with backoff, and flushed when the app goes to the
+background. Nothing is uploaded before the first cloud fetch succeeds, so an outdated phone can never
+overwrite newer data. The top bar shows the sync state (נשמר / שומר… / לא מקוון / השמירה נכשלה).
+
+**Setup (once):**
+
+1. Create a Supabase project. In the SQL editor run `supabase/migrations/0001_aurafin_init.sql` and
+   `0002_auth_roles_journeys.sql` (or `supabase db push`).
+2. Auth → URL configuration: add `https://eliya697.github.io/AuraFin-foundation-and-onboarding/` (and
+   `http://localhost:5173/` for dev) to the redirect URLs, so confirmation and password-reset links work.
+3. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see `web/.env.example`). Set the same
+   values as `AURAFIN_SUPABASE_URL` / `AURAFIN_SUPABASE_ANON_KEY` on the API host to require a valid,
+   non-suspended session on `/api/gate/validate` and `/api/coach/plan` (`api/app/auth.py`).
+4. Sign up with **eliyamistriel1234@gmail.com** and confirm the email: the `admin_emails` allow-list makes
+   that account an admin (an account that already exists is upgraded by the migration's backfill).
+
+**Roles.** Regular users can read and write only their own journey (RLS). Admins (confirmed email, role
+`admin`, not suspended) get the **ניהול** tab: every user with stage, track and income; a detail sheet
+with the full journey; promote/demote admins, suspend/unsuspend, and reset a user's journey. These go
+through `security definer` RPCs (`admin_list_users`, `admin_set_role`, `admin_set_suspended`,
+`admin_reset_journey`) that re-check `is_admin()` on the server; admins cannot demote or suspend
+themselves. Suspended users see a notice and cannot write data or call the API.
+
+Without Supabase settings, `npm run dev` uses a **browser-only dev login** (`services/backend/localBackend.js`,
+never included in production builds); signing up with the admin email there makes a local admin.
+
+## Mobile behaviour
+
+- **Back button** (`lib/backNavigation.js`): one guard history entry catches Android's hardware/gesture
+  back. Back closes the open dialog, then goes to the previous gate/quiz step, then leaves an edit or a
+  sub-screen; on the home screen it asks before exiting (a second back press exits).
+- **Crash isolation**: `ErrorBoundary` wraps the app, each stage, each dashboard section and the plan,
+  so a failure shows a retry card instead of a white screen.
+- **Editing**: "עדכון נתונים" / "עריכת פרופיל" keep a snapshot so "ביטול" restores the dashboard
+  untouched; saving re-verifies and the plan is regenerated for the new numbers.
+- **Layout**: bottom tab bar on phones (top nav on desktop), `env(safe-area-inset-*)` on every edge,
+  48×48 px minimum touch targets, no `backdrop-filter`/filter animations, transform-only animations,
+  memoised inputs and charts, `content-visibility` for long lists.
 
 ## Run
 
@@ -29,7 +74,7 @@ npm run dev                                          # http://localhost:5173, pr
 `npm run deploy` (in `web/`) publishes to https://eliya697.github.io/AuraFin-foundation-and-onboarding/. GitHub Pages cannot run the API, so:
 
 - **No `VITE_API_URL` at build time** → the static app never calls `/api` (GitHub Pages would answer 405). The gate validates with the same rules client-side, analysis runs in the browser (`web/src/lib/analysis.js`), and the dashboard shows a local plan with a "מצב לא מקוון" badge.
-- **`VITE_API_URL=https://your-api.example.com npm run deploy`** → uses a hosted API (allow the Pages origin via `AURAFIN_ALLOWED_ORIGINS`, already included by default). If it is unreachable (network error, timeout, 404/405/502/503/504 that isn't a JSON response from our API), the app falls back to offline mode. A 422 validation error is never bypassed.
+- **`VITE_API_URL=https://your-api.example.com npm run deploy`** → uses a hosted API (allow the Pages origin via `AURAFIN_ALLOWED_ORIGINS`, already included by default). If it is unreachable (network error, timeout, 404/405/500/502/503/504 that isn't a JSON response from our API), the app falls back to offline mode and keeps re-checking in the background; once the server answers, the badge turns to "הנתונים אומתו". A 422 validation error, 401 or 403 is never bypassed. The app pings `/api/health` on start so a sleeping free-tier host is awake by the time the gate submits.
 
 In offline mode the gate is enforced by the client only; with a backend, the server remains the authority.
 
@@ -68,11 +113,11 @@ Enforcement is layered:
 
 ```bash
 cd api && pytest -q      # gate contract, children/custom rules, prompt content, Gemini request shape + failure modes, fixtures
-cd web && npm test       # JS analysis engine vs the shared fixtures
+cd web && npm test       # JS analysis engine vs the shared fixtures, journey model, back stack, update-data regression
 ```
 
 Covers the gate contract (missing/blank/string/negative/oversized values, zero reserve, unknown track, extra fields), the plan endpoint's re-validation, mock mode, and the exact Gemini request shape and failure handling (via a stubbed client, no API spend).
 
 ## Note
 
-`supabase/migrations/0001_aurafin_init.sql` is the v1 schema and is not used by 2.0, which currently persists the journey in `localStorage`.
+`supabase/migrations/0001_aurafin_init.sql` is the v1 schema (`profiles`, `transactions`, `ai_insights`); 2.0 uses `0002_auth_roles_journeys.sql`.

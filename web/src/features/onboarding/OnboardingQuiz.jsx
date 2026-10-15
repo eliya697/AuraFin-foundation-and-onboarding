@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Baby, Minus, Plus, Target, UserRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Baby, Minus, Plus, Target, UserRound, X } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
 import OptionCard from '../../components/ui/OptionCard.jsx';
 import { GOALS, LIFE_STAGES, recommendTracks } from '../../lib/catalog.js';
 import { MAX_CHILDREN, formatPercent } from '../../lib/budget.js';
+import { BACK_PRIORITY, useBackHandler } from '../../hooks/useBackHandler.js';
 
 const QUESTIONS = [
   { key: 'lifeStage', eyebrow: 'שאלה 1 מתוך 3', title: 'מי אתם?', subtitle: 'נתאים את הרף לשלב בחיים שלכם.' },
@@ -49,7 +50,7 @@ function ChildrenCounter({ value, onChange }) {
             onClick={() => onChange(clamp(value - 1))}
             disabled={value <= 1}
             aria-label="פחות ילדים"
-            className="grid h-11 w-11 place-items-center rounded-2xl border border-navy/10 bg-white text-navy shadow-sm disabled:opacity-40"
+            className="grid h-12 w-12 place-items-center rounded-2xl border border-navy/10 bg-white text-navy shadow-sm disabled:opacity-40"
           >
             <Minus size={18} />
           </motion.button>
@@ -69,7 +70,7 @@ function ChildrenCounter({ value, onChange }) {
             onClick={() => onChange(clamp(value + 1))}
             disabled={value >= MAX_CHILDREN}
             aria-label="יותר ילדים"
-            className="grid h-11 w-11 place-items-center rounded-2xl bg-turquoise text-white shadow-sm disabled:opacity-40"
+            className="grid h-12 w-12 place-items-center rounded-2xl bg-turquoise text-white shadow-sm disabled:opacity-40"
           >
             <Plus size={18} />
           </motion.button>
@@ -79,7 +80,8 @@ function ChildrenCounter({ value, onChange }) {
   );
 }
 
-export default function OnboardingQuiz({ initialProfile, onComplete }) {
+/** `onCancel` (optional): leave without saving — shown when the quiz was reopened to edit the profile. */
+export default function OnboardingQuiz({ initialProfile, onComplete, onCancel }) {
   const [answers, setAnswers] = useState({
     lifeStage: initialProfile?.lifeStage ?? null,
     goal: initialProfile?.goal ?? null,
@@ -90,7 +92,11 @@ export default function OnboardingQuiz({ initialProfile, onComplete }) {
   const [[step, direction], setStep] = useState([0, 1]);
   const question = QUESTIONS[step];
 
-  const go = (delta) => setStep(([current]) => [current + delta, delta]);
+  const go = (delta) => setStep(([current]) => [Math.max(0, current + delta), delta]);
+
+  // System back button: previous question first, then leave the edit.
+  useBackHandler(() => go(-1), { enabled: step > 0, priority: BACK_PRIORITY.step });
+  useBackHandler(() => onCancel?.(), { enabled: Boolean(onCancel), priority: BACK_PRIORITY.screen });
   const advanceFrom = (from) =>
     // Advance only if still on the same question (guards against double taps).
     setTimeout(() => setStep(([current, dir]) => (current === from ? [current + 1, 1] : [current, dir])), AUTO_ADVANCE_MS);
@@ -234,7 +240,7 @@ export default function OnboardingQuiz({ initialProfile, onComplete }) {
 
       <div className="mt-10 flex items-center gap-3">
         {step > 0 && (
-          <Button variant="secondary" onClick={() => go(-1)} aria-label="חזרה לשאלה הקודמת">
+          <Button variant="secondary" size="icon" onClick={() => go(-1)} aria-label="חזרה לשאלה הקודמת">
             <ArrowRight size={18} />
           </Button>
         )}
@@ -244,6 +250,11 @@ export default function OnboardingQuiz({ initialProfile, onComplete }) {
         </Button>
         {question.key === 'trackId' && !answers.trackId && (
           <span className="text-sm text-navy-soft">יש לבחור מסלול כדי להמשיך</span>
+        )}
+        {onCancel && (
+          <Button variant="ghost" onClick={onCancel} className="ms-auto" aria-label="ביטול העריכה">
+            <X size={16} /> ביטול
+          </Button>
         )}
       </div>
     </div>

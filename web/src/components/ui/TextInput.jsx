@@ -1,9 +1,9 @@
-import { forwardRef, useEffect, useId } from 'react';
+import { forwardRef, memo, useEffect, useId } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 
 const TextInput = forwardRef(function TextInput(
-  { label, value, error, onChange, onBlur, placeholder, maxLength, shakeSignal = 0 },
+  { name, label, value, error, onChange, onBlur, placeholder, maxLength, shakeSignal = 0 },
   ref,
 ) {
   const id = useId();
@@ -29,8 +29,8 @@ const TextInput = forwardRef(function TextInput(
         autoComplete="off"
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
+        onChange={(e) => onChange(e.target.value, name)}
+        onBlur={() => onBlur?.(name)}
         className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-lg font-semibold text-navy outline-none transition-colors placeholder:font-normal placeholder:text-navy/30 focus:ring-4 ${
           error
             ? 'border-danger/70 bg-danger/[0.03] focus:ring-danger/10'
@@ -56,4 +56,5 @@ const TextInput = forwardRef(function TextInput(
   );
 });
 
-export default TextInput;
+/** Memoised: callbacks receive `name`, so parents can pass one stable handler for every field. */
+export default memo(TextInput);

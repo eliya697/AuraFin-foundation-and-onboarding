@@ -45,27 +45,27 @@ export default function CustomExpensesEditor({ items, onChange, errorFor, onBlur
           {items.map((item, index) => (
             <motion.li
               key={item.id}
-              layout
               initial={{ opacity: 0, y: 16, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               className="rounded-3xl border border-navy/[0.07] bg-white p-4 shadow-[var(--shadow-soft)]"
             >
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-1 flex items-center justify-between">
                 <span className="text-xs font-bold text-turquoise-dark">הוצאה {index + 1}</span>
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.9 }}
                   onClick={() => remove(item.id)}
                   aria-label={`מחיקת ${item.title || `הוצאה ${index + 1}`}`}
-                  className="grid h-8 w-8 place-items-center rounded-full text-navy/40 transition-colors hover:bg-danger/10 hover:text-danger"
+                  className="-me-2 grid h-12 w-12 place-items-center rounded-full text-navy/40 transition-colors hover:bg-danger/10 hover:text-danger"
                 >
                   <Trash2 size={16} />
                 </motion.button>
               </div>
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
                 <TextInput
+                  name={customKey(item.id, 'title')}
                   ref={(node) => registerRef.set(customKey(item.id, 'title'), node)}
                   label="שם ההוצאה / כותרת"
                   placeholder="למשל: חדר כושר"
@@ -74,16 +74,17 @@ export default function CustomExpensesEditor({ items, onChange, errorFor, onBlur
                   error={errorFor(customKey(item.id, 'title'))}
                   shakeSignal={shakeSignal}
                   onChange={(title) => update(item.id, { title })}
-                  onBlur={() => onBlurField(customKey(item.id, 'title'))}
+                  onBlur={onBlurField}
                 />
                 <MoneyInput
+                  name={customKey(item.id, 'amount')}
                   ref={(node) => registerRef.set(customKey(item.id, 'amount'), node)}
                   label="סכום ב-₪"
                   value={item.amount}
                   error={errorFor(customKey(item.id, 'amount'))}
                   shakeSignal={shakeSignal}
                   onChange={(amount) => update(item.id, { amount })}
-                  onBlur={() => onBlurField(customKey(item.id, 'amount'))}
+                  onBlur={onBlurField}
                 />
               </div>
             </motion.li>
@@ -106,7 +107,7 @@ export default function CustomExpensesEditor({ items, onChange, errorFor, onBlur
                 type="button"
                 whileTap={{ scale: 0.95 }}
                 onClick={() => add(title)}
-                className="rounded-full bg-mist px-3 py-1.5 text-sm font-medium text-navy-soft transition-colors hover:bg-turquoise/10 hover:text-turquoise-dark"
+                className="min-h-12 rounded-full bg-mist px-4 text-sm font-medium text-navy-soft transition-colors hover:bg-turquoise/10 hover:text-turquoise-dark"
               >
                 + {title}
               </motion.button>

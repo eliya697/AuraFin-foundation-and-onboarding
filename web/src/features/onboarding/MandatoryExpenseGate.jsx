@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, Loader2, Lock, LockOpen, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Lock, LockOpen, PencilLine, TriangleAlert, X } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
 import MoneyInput from '../../components/ui/MoneyInput.jsx';
 import CustomExpensesEditor from './CustomExpensesEditor.jsx';
@@ -19,6 +19,8 @@ import {
 import { analyzeBudget } from '../../lib/analysis.js';
 import { ApiError, OfflineError, validateGate } from '../../services/api.js';
 import { useJourney } from '../../state/JourneyContext.jsx';
+import { BACK_PRIORITY, useBackHandler } from '../../hooks/useBackHandler.js';
+import { useLastDefined } from '../../hooks/useLastDefined.js';
 
 const HINTS = {
   rent: 'גרים אצל ההורים או בדירה בבעלות בלי משכנתא? כתבו 0.',
@@ -30,13 +32,19 @@ const HINTS = {
   shopping: 'בגדים, גאדג׳טים, קניות אונליין.',
 };
 
+/**
+ * The budget is read from and written straight to the journey store (no local copy), so a cloud
+ * refresh, a cancel or a remount can never leave the form and the store disagreeing.
+ */
 export default function MandatoryExpenseGate() {
-  const { state, updateBudget, unlockDashboard } = useJourney();
-  const profile = state.profile;
-  const track = TRACKS[profile.trackId];
+  const { state, updateBudget, unlockDashboard, cancelEdit, reopenQuiz } = useJourney();
+  // Kept from the last render while this screen animates out after the profile was cleared.
+  const profile = useLastDefined(state.profile);
+  const values = state.budget;
+  const editing = Boolean(state.editing?.original);
+  const track = TRACKS[profile?.trackId];
   const steps = useMemo(() => getGateSteps(profile), [profile]);
 
-  const [values, setValues] = useState(state.budget);
   const [[stepIndex, direction], setStep] = useState([0, 1]);
   const [touched, setTouched] = useState({});
   const [attempted, setAttempted] = useState({});
@@ -45,41 +53,69 @@ export default function MandatoryExpenseGate() {
   const [banner, setBanner] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const inputRefs = useRef({});
+  const refCallbacks = useRef(new Map());
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
 
-  const step = steps[stepIndex];
-  const isLast = stepIndex === steps.length - 1;
+  const safeIndex = Math.min(stepIndex, steps.length - 1);
+  const step = steps[safeIndex];
+  const isLast = safeIndex === steps.length - 1;
   const liveErrors = useMemo(() => validateBudget(values, profile), [values, profile]);
-  const progress = gateProgress(values, profile);
+  const progress = useMemo(() => gateProgress(values, profile), [values, profile]);
   const stepErrorKeys = (s) =>
     [...Object.keys(liveErrors), ...Object.keys(serverErrors)].filter((key) => stepOwnsError(s, key));
   const stepIsValid = (s) => stepErrorKeys(s).length === 0;
 
   const visibleError = (key) => serverErrors[key] || ((attempted[step.key] || touched[key]) && liveErrors[key]) || null;
-  const markTouched = (key) => setTouched((prev) => ({ ...prev, [key]: true }));
+  const markTouched = useCallback((key) => setTouched((prev) => (prev[key] ? prev : { ...prev, [key]: true })), []);
 
-  const refs = {
-    set: (key, node) => {
-      inputRefs.current[key] = node;
+  const refs = useMemo(
+    () => ({
+      set: (key, node) => {
+        inputRefs.current[key] = node;
+      },
+      /** Stable callback ref per field, so memoised inputs are not re-rendered by a new ref. */
+      for: (key) => {
+        if (!refCallbacks.current.has(key)) refCallbacks.current.set(key, (node) => (inputRefs.current[key] = node));
+        return refCallbacks.current.get(key);
+      },
+      focus: (key) => inputRefs.current[key]?.focus({ preventScroll: false }),
+    }),
+    [],
+  );
+
+  const commit = useCallback(
+    (next, changedKeys) => {
+      updateBudget(next);
+      setBanner(null);
+      setServerErrors((prev) => {
+        if (!changedKeys.some((key) => prev[key])) return prev;
+        return Object.fromEntries(Object.entries(prev).filter(([key]) => !changedKeys.includes(key)));
+      });
     },
-    focus: (key) => inputRefs.current[key]?.focus(),
-  };
+    [updateBudget],
+  );
 
-  const commit = (next, changedKeys) => {
-    setValues(next);
-    updateBudget(next);
-    setBanner(null);
-    if (changedKeys.some((key) => serverErrors[key])) {
-      setServerErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => !changedKeys.includes(key))));
-    }
-  };
-
-  const setValue = (key, value) => commit({ ...values, [key]: value }, [key]);
-  const setCustom = (custom) => commit({ ...values, custom }, Object.keys(serverErrors).filter((k) => k.startsWith('custom')));
+  const setValue = useCallback((value, key) => commit({ ...valuesRef.current, [key]: value }, [key]), [commit]);
+  const setCustom = useCallback(
+    (custom) =>
+      commit(
+        { ...valuesRef.current, custom },
+        Object.keys(serverErrors).filter((k) => k.startsWith('custom')),
+      ),
+    [commit, serverErrors],
+  );
 
   const goTo = (index) => {
     setBanner(null);
     setStep(([current]) => [index, index >= current ? 1 : -1]);
   };
+
+  // System back button: previous step → leave the edit (or return to the quiz during onboarding).
+  useBackHandler(() => goTo(safeIndex - 1), { enabled: safeIndex > 0 && !submitting, priority: BACK_PRIORITY.step });
+  useBackHandler(() => (editing ? cancelEdit() : reopenQuiz()), { enabled: !submitting, priority: BACK_PRIORITY.screen });
+
+  if (!profile || !track || !step) return null;
 
   const describe = (keys) => {
     if (keys.length !== 1) return `רגע — יש ${keys.length} שדות להשלים לפני שממשיכים. סימנו אותם באדום.`;
@@ -105,30 +141,32 @@ export default function MandatoryExpenseGate() {
     if (invalid.length) {
       const firstStep = steps.findIndex((s) => stepOwnsError(s, invalid[0]));
       setAttempted(Object.fromEntries(steps.map((s) => [s.key, true])));
-      goTo(firstStep);
+      goTo(Math.max(firstStep, 0));
       setBanner({ tone: 'warning', message: describe(invalid) });
       return;
     }
 
+    const submitted = values;
     setSubmitting(true);
     setBanner(null);
     try {
-      const result = await validateGate(buildSnapshot(profile, values));
-      unlockDashboard(values, result.analysis, 'server');
+      const result = await validateGate(buildSnapshot(profile, submitted));
+      unlockDashboard(submitted, result.analysis, 'server');
     } catch (error) {
       if (error instanceof OfflineError) {
-        // The API is absent/unreachable (e.g. GitHub Pages answers 405). Every rule above already
-        // passed client-side, so the gate unlocks locally instead of trapping the user.
+        // The API is absent/unreachable (e.g. GitHub Pages answers 405, or the host is asleep).
+        // Every rule already passed client-side, so unlock locally; the dashboard re-verifies
+        // against the server in the background once it is reachable.
         unlockOffline(error.reason);
       } else if (error instanceof ApiError && error.status === 422) {
-        const mapped = mapServerErrors(error.fields, values);
+        const mapped = mapServerErrors(error.fields, submitted);
         setServerErrors(mapped);
         setAttempted(Object.fromEntries(steps.map((s) => [s.key, true])));
         const firstStep = steps.findIndex((s) => Object.keys(mapped).some((key) => stepOwnsError(s, key)));
         if (firstStep >= 0) goTo(firstStep);
         setBanner({ tone: 'warning', message: error.message });
       } else {
-        setBanner({ tone: 'error', message: `${error.message} הדשבורד יישאר נעול עד שהנתונים יאומתו.` });
+        setBanner({ tone: 'error', message: `${error?.message ?? 'שגיאה לא צפויה.'} הדשבורד יישאר נעול עד שהנתונים יאומתו.` });
       }
     } finally {
       setSubmitting(false);
@@ -142,10 +180,10 @@ export default function MandatoryExpenseGate() {
       return;
     }
     if (isLast) submit();
-    else goTo(stepIndex + 1);
+    else goTo(safeIndex + 1);
   };
 
-  const canJumpTo = (index) => index <= stepIndex || steps.slice(0, index).every(stepIsValid);
+  const canJumpTo = (index) => index <= safeIndex || steps.slice(0, index).every(stepIsValid);
   const totals = previewTotals(values, profile);
   const suggestedReserve = (() => {
     const { reserveBoostPerChild, reserveBoostMax } = CATALOG.children;
@@ -157,30 +195,48 @@ export default function MandatoryExpenseGate() {
   return (
     <div>
       {/* Gate status */}
-      <div className="mb-6 flex items-center gap-3 rounded-2xl border border-navy/[0.06] bg-mist px-4 py-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-navy shadow-sm">
-          <Lock size={17} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-navy">הדשבורד נעול עד שכל הנתונים יושלמו</p>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy/[0.08]">
-            <motion.div
-              className="h-full rounded-full bg-gradient-to-l from-turquoise to-mint"
-              animate={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
-              transition={{ duration: 0.4 }}
-            />
+      {editing ? (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-turquoise/20 bg-turquoise/[0.06] px-4 py-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-turquoise-dark shadow-sm">
+            <PencilLine size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-navy">עריכת נתונים</p>
+            <p className="text-xs text-navy-soft">התוכנית תחושב מחדש באישור</p>
           </div>
+          <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={submitting} aria-label="ביטול העריכה וחזרה לדשבורד">
+            <X size={16} /> ביטול
+          </Button>
         </div>
-        <span className="text-sm font-bold tabular-nums text-navy-soft">
-          {progress.done}/{progress.total}
-        </span>
-      </div>
+      ) : (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-navy/[0.06] bg-mist px-4 py-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-navy shadow-sm">
+            <Lock size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-navy">הדשבורד נעול עד שכל הנתונים יושלמו</p>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy/[0.08]">
+              <div
+                className="h-full origin-right rounded-full bg-gradient-to-l from-turquoise to-mint transition-transform duration-400 ease-out"
+                style={{ transform: `scaleX(${progress.total ? progress.done / progress.total : 0})` }}
+              />
+            </div>
+          </div>
+          <span className="text-sm font-bold tabular-nums text-navy-soft">
+            {progress.done}/{progress.total}
+          </span>
+        </div>
+      )}
 
       {/* Sub-step tabs */}
-      <nav aria-label="שלבי הנתונים" className="mb-8 flex gap-1.5 overflow-x-auto pb-1 sm:grid sm:overflow-visible" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+      <nav
+        aria-label="שלבי הנתונים"
+        className="no-scrollbar -mx-1 mb-8 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1 sm:grid sm:overflow-visible"
+        style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+      >
         {steps.map((s, i) => {
-          const done = i < stepIndex && stepIsValid(s);
-          const current = i === stepIndex;
+          const done = i < safeIndex && stepIsValid(s);
+          const current = i === safeIndex;
           const Icon = s.icon;
           return (
             <button
@@ -190,7 +246,7 @@ export default function MandatoryExpenseGate() {
               onClick={() => goTo(i)}
               aria-current={current ? 'step' : undefined}
               aria-label={s.title}
-              className={`flex shrink-0 flex-col items-center gap-1.5 rounded-2xl px-2 py-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 lg:flex-row lg:justify-center ${
+              className={`flex min-h-12 min-w-12 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 lg:flex-row ${
                 current ? 'bg-turquoise/10 text-turquoise-dark' : done ? 'text-navy' : 'text-navy-soft hover:bg-mist'
               }`}
             >
@@ -221,15 +277,15 @@ export default function MandatoryExpenseGate() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="flex items-start gap-4">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-turquoise to-mint text-white shadow-[var(--shadow-glow)]">
                 <StepIcon size={22} />
               </span>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-bold text-turquoise-dark">
-                  שלב {stepIndex + 1} מתוך {steps.length}
+                  שלב {safeIndex + 1} מתוך {steps.length}
                 </p>
                 <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">{step.title}</h1>
                 <p className="mt-1 text-navy-soft">
@@ -256,7 +312,8 @@ export default function MandatoryExpenseGate() {
                   {step.fields.map((key) => (
                     <MoneyInput
                       key={key}
-                      ref={(node) => refs.set(key, node)}
+                      name={key}
+                      ref={refs.for(key)}
                       label={FIELDS[key].label}
                       hint={
                         key === 'unexpected'
@@ -267,8 +324,8 @@ export default function MandatoryExpenseGate() {
                       error={visibleError(key)}
                       shakeSignal={shakeSignal}
                       large={step.fields.length === 1}
-                      onChange={(value) => setValue(key, value)}
-                      onBlur={() => markTouched(key)}
+                      onChange={setValue}
+                      onBlur={markTouched}
                     />
                   ))}
                 </div>
@@ -310,8 +367,8 @@ export default function MandatoryExpenseGate() {
         </AnimatePresence>
 
         <div className="mt-8 flex items-center gap-3">
-          {stepIndex > 0 && (
-            <Button variant="secondary" onClick={() => goTo(stepIndex - 1)} disabled={submitting} aria-label="לשלב הקודם">
+          {safeIndex > 0 && (
+            <Button variant="secondary" size="icon" onClick={() => goTo(safeIndex - 1)} disabled={submitting} aria-label="לשלב הקודם">
               <ArrowRight size={18} />
             </Button>
           )}
@@ -322,7 +379,7 @@ export default function MandatoryExpenseGate() {
               </>
             ) : isLast ? (
               <>
-                <LockOpen size={18} /> פתיחת הדשבורד
+                <LockOpen size={18} /> {editing ? 'שמירה וחישוב מחדש' : 'פתיחת הדשבורד'}
               </>
             ) : (
               <>

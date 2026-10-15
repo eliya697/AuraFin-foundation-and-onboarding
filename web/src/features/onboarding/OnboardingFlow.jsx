@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ClipboardList, LayoutDashboard, Lock, Sparkles, UserRound } from 'lucide-react';
 import Card from '../../components/ui/Card.jsx';
-import Logo from '../../components/ui/Logo.jsx';
+import ErrorBoundary from '../../components/ErrorBoundary.jsx';
 import WelcomeScreen from './WelcomeScreen.jsx';
 import OnboardingQuiz from './OnboardingQuiz.jsx';
 import MandatoryExpenseGate from './MandatoryExpenseGate.jsx';
@@ -16,8 +16,8 @@ const JOURNEY = [
 
 const page = {
   initial: { opacity: 0, y: 24 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
-  exit: { opacity: 0, y: -16, transition: { duration: 0.25 } },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
+  exit: { opacity: 0, y: -16, transition: { duration: 0.2 } },
 };
 
 function JourneyStepper({ stage }) {
@@ -54,10 +54,12 @@ function JourneyStepper({ stage }) {
 
 /**
  * Enforces the mandatory journey: Welcome → Quiz → Expense Gate. The stage comes from
- * resolveStage() in JourneyContext, so there is no way to render a later step early.
+ * resolveStage() in the journey model, so there is no way to render a later step early.
  */
 export default function OnboardingFlow() {
-  const { state, stage, completeWelcome, completeQuiz, reopenQuiz } = useJourney();
+  const { state, stage, completeWelcome, completeQuiz, reopenQuiz, cancelEdit } = useJourney();
+  const editingProfile = state.editing?.kind === 'profile';
+  const editingFromDashboard = Boolean(state.editing?.original);
 
   if (stage === 'welcome') {
     return (
@@ -68,23 +70,36 @@ export default function OnboardingFlow() {
   }
 
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-4xl px-4 pb-12 pt-5 sm:px-8 sm:pt-8">
-      <header className="mb-6 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-        <Logo size={32} />
-        <JourneyStepper stage={stage} />
-      </header>
+    <div className="mx-auto w-full max-w-4xl px-4 pb-10 pt-4 sm:px-8 sm:pt-8">
+      {!editingFromDashboard && (
+        <header className="mb-5 flex justify-center sm:mb-8 sm:justify-start">
+          <JourneyStepper stage={stage} />
+        </header>
+      )}
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div key={stage} {...page}>
           <Card padding="p-5 sm:p-10">
-            {stage === 'quiz' && <OnboardingQuiz initialProfile={state.profile} onComplete={completeQuiz} />}
-            {stage === 'gate' && <MandatoryExpenseGate />}
+            <ErrorBoundary label={`Onboarding ${stage}`} resetKeys={[stage]}>
+              {stage === 'quiz' && (
+                <OnboardingQuiz
+                  initialProfile={state.profile}
+                  onComplete={completeQuiz}
+                  onCancel={editingProfile && (editingFromDashboard || state.profile) ? cancelEdit : undefined}
+                />
+              )}
+              {stage === 'gate' && <MandatoryExpenseGate />}
+            </ErrorBoundary>
           </Card>
           {stage === 'gate' && (
             <p className="mt-4 text-center text-sm text-navy-soft">
-              רוצים לשנות מסלול?{' '}
-              <button type="button" onClick={reopenQuiz} className="font-semibold text-turquoise-dark underline-offset-4 hover:underline">
-                חזרה לשאלון
+              רוצים לשנות מסלול או פרטי משפחה?{' '}
+              <button
+                type="button"
+                onClick={reopenQuiz}
+                className="inline-flex min-h-12 items-center font-semibold text-turquoise-dark underline-offset-4 hover:underline"
+              >
+                עריכת הפרופיל
               </button>
             </p>
           )}

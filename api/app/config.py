@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     max_tokens: int = 16000
     catalog_path: Path = DEFAULT_CATALOG
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://eliya697.github.io"
+    # Supabase project used by the web app. When both are set, every API call requires a signed-in user.
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
 
     @property
     def origins(self) -> list[str]:

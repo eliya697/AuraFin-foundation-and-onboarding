@@ -1,9 +1,9 @@
-import { forwardRef, useEffect, useId } from 'react';
+import { forwardRef, memo, useEffect, useId } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 import { sanitizeAmount } from '../../lib/budget.js';
 
-const MoneyInput = forwardRef(function MoneyInput({ label, hint, value, error, onChange, onBlur, shakeSignal = 0, large = false }, ref) {
+const MoneyInput = forwardRef(function MoneyInput({ name, label, hint, value, error, onChange, onBlur, shakeSignal = 0, large = false }, ref) {
   const id = useId();
   const controls = useAnimationControls();
 
@@ -31,12 +31,13 @@ const MoneyInput = forwardRef(function MoneyInput({ label, hint, value, error, o
           id={id}
           inputMode="decimal"
           autoComplete="off"
+          enterKeyHint="next"
           placeholder="0"
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
           value={value}
-          onChange={(e) => onChange(sanitizeAmount(e.target.value))}
-          onBlur={onBlur}
+          onChange={(e) => onChange(sanitizeAmount(e.target.value), name)}
+          onBlur={() => onBlur?.(name)}
           className={`w-full bg-transparent px-4 font-bold tabular-nums text-navy outline-none placeholder:font-normal placeholder:text-navy/25 ${
             large ? 'py-4 text-3xl' : 'py-3.5 text-lg'
           }`}
@@ -71,4 +72,5 @@ const MoneyInput = forwardRef(function MoneyInput({ label, hint, value, error, o
   );
 });
 
-export default MoneyInput;
+/** Memoised: callbacks receive `name`, so parents can pass one stable handler for every field. */
+export default memo(MoneyInput);

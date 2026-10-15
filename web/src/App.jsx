@@ -1,43 +1,85 @@
-import { lazy, Suspense } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
-import OnboardingFlow from './features/onboarding/OnboardingFlow.jsx';
+import { useEffect } from 'react';
+import { Ban, LogOut, Settings } from 'lucide-react';
+import AppShell from './app/AppShell.jsx';
+import AuthScreen from './features/auth/AuthScreen.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import ExitPrompt from './components/ExitPrompt.jsx';
+import Spinner from './components/Spinner.jsx';
+import Button from './components/ui/Button.jsx';
+import Card from './components/ui/Card.jsx';
+import Logo from './components/ui/Logo.jsx';
 import UpdateNotification from './components/UpdateNotification.jsx';
 import InstallBanner from './components/InstallBanner.jsx';
-import { useJourney } from './state/JourneyContext.jsx';
+import { useAuth } from './state/AuthContext.jsx';
+import { JourneyProvider } from './state/JourneyContext.jsx';
+import { warmUp } from './services/api.js';
 
-const Dashboard = lazy(() => import('./features/dashboard/Dashboard.jsx'));
+/**
+ * Auth guard. Nothing past this point renders without a signed-in, non-suspended user; each user
+ * gets their own JourneyProvider (keyed by id) so data never leaks between accounts on one device.
+ */
+function Guarded() {
+  const { status, user, backend, recovery } = useAuth();
 
-function Spinner() {
+  if (status === 'loading') return <Spinner fullScreen />;
+  if (status === 'unconfigured') return <Notice icon={Settings} title="נדרשת הגדרה" body="שירות ההתחברות לא הוגדר בגרסה הזו. מנהל המערכת צריך להגדיר את VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY ולפרסם מחדש." />;
+  if (recovery) return <AuthScreen initialMode="recovery" />;
+  if (status !== 'signedIn' || !user) return <AuthScreen />;
+  if (user.suspended) return <Suspended />;
+
   return (
-    <div className="grid min-h-dvh place-items-center">
-      <Loader2 className="animate-spin text-turquoise" size={32} aria-label="טוען" />
+    <JourneyProvider key={user.id} userId={user.id} backend={backend}>
+      <AppShell />
+    </JourneyProvider>
+  );
+}
+
+function Suspended() {
+  const { signOut } = useAuth();
+  return (
+    <Notice icon={Ban} title="החשבון הושעה" body="הגישה לחשבון הזה הושעתה על ידי מנהל המערכת. לבירור, פנו למנהל.">
+      <Button variant="secondary" className="mt-6 w-full" onClick={signOut}>
+        <LogOut size={18} /> התנתקות
+      </Button>
+    </Notice>
+  );
+}
+
+function Notice({ icon: Icon, title, body, children }) {
+  return (
+    <div className="grid min-h-dvh place-items-center px-4 safe-x">
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex justify-center">
+          <Logo size={36} />
+        </div>
+        <Card padding="p-6 sm:p-8" className="text-center">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-mist text-navy">
+            <Icon size={26} />
+          </span>
+          <h1 className="mt-4 text-2xl font-extrabold text-navy">{title}</h1>
+          <p className="mt-2 leading-relaxed text-navy-soft">{body}</p>
+          {children}
+        </Card>
+      </div>
     </div>
   );
 }
 
 export default function App() {
-  const { stage } = useJourney();
-  const unlocked = stage === 'dashboard';
+  // Wake a sleeping API host early so the gate's server check is fast later.
+  useEffect(() => {
+    warmUp();
+  }, []);
 
   return (
     <>
-      <AnimatePresence mode="wait">
-        {unlocked ? (
-          <motion.main key="dashboard" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            <Suspense fallback={<Spinner />}>
-              <Dashboard />
-            </Suspense>
-          </motion.main>
-        ) : (
-          <motion.main key="onboarding" exit={{ opacity: 0, y: -16 }}>
-            <OnboardingFlow />
-          </motion.main>
-        )}
-      </AnimatePresence>
-      {/* Global: rendered outside the stage switch so it persists across every screen. */}
+      <ErrorBoundary fullScreen label="App">
+        <Guarded />
+      </ErrorBoundary>
+      {/* Global: outside the guard so they persist across every screen. */}
       <UpdateNotification />
       <InstallBanner />
+      <ExitPrompt />
     </>
   );
 }

@@ -65,7 +65,7 @@ export default function InstallBanner() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -16, transition: { duration: 0.2 } }}
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-          className="fixed inset-x-4 top-4 z-[90] sm:inset-x-auto sm:top-auto sm:bottom-6 sm:start-6 sm:w-[360px]"
+          className="gpu top-overlay fixed inset-x-4 z-[90] sm:inset-x-auto sm:top-auto sm:bottom-6 sm:start-6 sm:w-[360px]"
         >
           <div className="relative overflow-hidden rounded-3xl border border-turquoise/30 bg-white p-4 shadow-[0_2px_6px_rgb(0_33_71/0.06),0_24px_56px_-16px_rgb(0_33_71/0.28)]">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-turquoise to-mint" />
@@ -73,12 +73,12 @@ export default function InstallBanner() {
               type="button"
               onClick={dismiss}
               aria-label="לא עכשיו"
-              className="absolute end-2.5 top-2.5 grid h-8 w-8 place-items-center rounded-full text-navy/40 transition-colors hover:bg-mist hover:text-navy"
+              className="absolute end-1 top-1 grid h-12 w-12 place-items-center rounded-full text-navy/40 transition-colors hover:bg-mist hover:text-navy"
             >
               <X size={16} />
             </button>
 
-            <div className="flex items-center gap-3 pe-7">
+            <div className="flex items-center gap-3 pe-10">
               <img
                 src={`${import.meta.env.BASE_URL}icons/icon-192.png`}
                 alt=""
@@ -100,7 +100,7 @@ export default function InstallBanner() {
                 onClick={install}
                 disabled={busy}
                 whileTap={{ scale: 0.96 }}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-turquoise to-mint px-5 py-3 font-bold text-white shadow-[0_12px_28px_-10px_rgb(0_196_204/0.65)] disabled:opacity-80"
+                className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-turquoise to-mint px-5 py-3 font-bold text-white shadow-[0_12px_28px_-10px_rgb(0_196_204/0.65)] disabled:opacity-80"
               >
                 <Download size={17} /> התקנת האפליקציה
               </motion.button>

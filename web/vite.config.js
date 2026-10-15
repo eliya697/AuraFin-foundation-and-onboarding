@@ -15,6 +15,12 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: {
     alias: { '@shared': sharedDir },
   },
+  test: {
+    environment: 'jsdom',
+    include: ['tests/**/*.test.{js,jsx}'],
+    setupFiles: ['tests/setup.js'],
+    restoreMocks: true,
+  },
   server: {
     port: 5173,
     fs: { allow: ['.', sharedDir] },

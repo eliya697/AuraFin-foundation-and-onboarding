@@ -15,10 +15,33 @@
   --shadow-glow: 0 12px 32px -10px rgb(0 196 204 / 0.55);
 }
 
+/* Layout tokens shared by the shell and fixed overlays. */
+:root {
+  --topbar-h: calc(3.5rem + env(safe-area-inset-top));
+  --bottom-nav-h: 4.25rem;
+  /* Space reserved at the bottom of the viewport for the mobile tab bar (0 when there is none). */
+  --app-bottom-inset: 0px;
+}
+
+:root[data-bottom-nav] {
+  --app-bottom-inset: var(--bottom-nav-h);
+}
+
+@media (min-width: 48rem) {
+  :root[data-bottom-nav] {
+    --app-bottom-inset: 0px;
+  }
+}
+
 @layer base {
   html {
     color-scheme: light;
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Keeps sticky headers from covering focused inputs and anchor targets. */
+    scroll-padding-top: calc(var(--topbar-h) + 1rem);
+    scroll-padding-bottom: calc(var(--app-bottom-inset) + env(safe-area-inset-bottom) + 1rem);
   }
 
   body {
@@ -27,6 +50,19 @@
     color: var(--color-navy);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    /* No pull-to-refresh/bounce chaining from inner scrollers; the page itself still scrolls. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Removes the double-tap-to-zoom delay on every control. */
+  a,
+  button,
+  input,
+  label,
+  select,
+  textarea,
+  [role='button'] {
+    touch-action: manipulation;
   }
 
   ::selection {
@@ -37,6 +73,11 @@
     outline: 3px solid rgb(0 196 204 / 0.45);
     outline-offset: 2px;
   }
+
+  html.scroll-locked,
+  html.scroll-locked body {
+    overflow: hidden;
+  }
 }
 
 @layer utilities {
@@ -45,5 +86,54 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  /* Promote fixed/sticky chrome to its own compositor layer so scrolling never repaints it. */
+  .gpu {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  /* Side safe areas (landscape notches). */
+  .safe-x {
+    padding-left: max(env(safe-area-inset-left), 0px);
+    padding-right: max(env(safe-area-inset-right), 0px);
+  }
+
+  /* Skip layout/paint of long off-screen content until it scrolls near the viewport. */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 900px;
+  }
+
+  .cv-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 72px;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Fixed overlays: above the bottom tab bar and the home indicator. */
+  .bottom-overlay {
+    bottom: calc(var(--app-bottom-inset) + env(safe-area-inset-bottom) + 1rem);
+  }
+  .top-overlay {
+    top: calc(env(safe-area-inset-top) + 0.75rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

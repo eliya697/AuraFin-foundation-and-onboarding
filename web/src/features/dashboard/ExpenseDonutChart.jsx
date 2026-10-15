@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import Card from '../../components/ui/Card.jsx';
@@ -15,7 +15,7 @@ const SEGMENTS = [
 
 function customDetail(items) {
   if (!items?.length) return 'הוצאות שהוספתם';
-  const titles = items.map((item) => item.title.trim()).filter(Boolean);
+  const titles = items.map((item) => String(item?.title ?? '').trim()).filter(Boolean);
   return titles.length > 2 ? `${titles.slice(0, 2).join(', ')} ועוד ${titles.length - 2}` : titles.join(', ');
 }
 
@@ -32,15 +32,20 @@ function DonutTooltip({ active, payload, total }) {
   );
 }
 
-export default function ExpenseDonutChart({ breakdown, customItems = [] }) {
+function ExpenseDonutChart({ breakdown = {}, customItems = [] }) {
   const [activeIndex, setActiveIndex] = useState(null);
   // Segments with no spending (e.g. no children, no custom items) are left out of the chart.
-  const data = SEGMENTS.map((segment) => ({
-    ...segment,
-    detail: segment.key === 'custom' ? customDetail(customItems) : segment.detail,
-    value: breakdown[segment.key] ?? 0,
-  })).filter((segment) => segment.value > 0);
-  const total = data.reduce((sum, d) => sum + d.value, 0);
+  const data = useMemo(
+    () =>
+      SEGMENTS.map((segment) => ({
+        ...segment,
+        detail: segment.key === 'custom' ? customDetail(customItems) : segment.detail,
+        value: Number(breakdown?.[segment.key]) || 0,
+      })).filter((segment) => segment.value > 0),
+    [breakdown, customItems],
+  );
+  const total = useMemo(() => data.reduce((sum, d) => sum + d.value, 0), [data]);
+  const tooltip = useMemo(() => <DonutTooltip total={total} />, [total]);
   const active = activeIndex === null ? null : data[activeIndex];
 
   return (
@@ -82,14 +87,14 @@ export default function ExpenseDonutChart({ breakdown, customItems = [] }) {
                   />
                 ))}
               </Pie>
-              <Tooltip content={<DonutTooltip total={total} />} />
+              <Tooltip content={tooltip} />
             </PieChart>
           </ResponsiveContainer>
           <div dir="rtl" className="pointer-events-none absolute inset-0 grid place-items-center text-center">
             <motion.div key={active?.key ?? 'total'} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
               <p className="text-xs text-navy-soft">{active ? active.label : 'סך ההוצאות'}</p>
               <p className="text-xl font-extrabold tabular-nums text-navy">{formatCurrency(active ? active.value : total)}</p>
-              {active && <p className="text-xs font-semibold text-turquoise-dark">{formatPercent(active.value / total)}</p>}
+              {active && <p className="text-xs font-semibold text-turquoise-dark">{formatPercent(total ? active.value / total : 0)}</p>}
             </motion.div>
           </div>
         </div>
@@ -99,11 +104,13 @@ export default function ExpenseDonutChart({ breakdown, customItems = [] }) {
             <li key={d.key}>
               <button
                 type="button"
-                onMouseEnter={() => setActiveIndex(i)}
-                onMouseLeave={() => setActiveIndex(null)}
+                aria-pressed={activeIndex === i}
+                onClick={() => setActiveIndex(i)}
+                onPointerEnter={(e) => e.pointerType === 'mouse' && setActiveIndex(i)}
+                onPointerLeave={(e) => e.pointerType === 'mouse' && setActiveIndex(null)}
                 onFocus={() => setActiveIndex(i)}
                 onBlur={() => setActiveIndex(null)}
-                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-start transition-colors ${
+                className={`flex min-h-12 w-full items-center gap-3 rounded-2xl px-3 py-2 text-start transition-colors ${
                   activeIndex === i ? 'bg-mist' : 'hover:bg-mist/60'
                 }`}
               >
@@ -124,3 +131,5 @@ export default function ExpenseDonutChart({ breakdown, customItems = [] }) {
     </Card>
   );
 }
+
+export default memo(ExpenseDonutChart);

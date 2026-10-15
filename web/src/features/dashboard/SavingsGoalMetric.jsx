@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { CircleCheck, TrendingDown, TriangleAlert } from 'lucide-react';
 import Card from '../../components/ui/Card.jsx';
@@ -6,7 +7,7 @@ import { formatCurrency, formatPercent } from '../../lib/budget.js';
 const RADIUS = 52;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-export default function SavingsGoalMetric({ analysis }) {
+function SavingsGoalMetric({ analysis }) {
   const saved = analysis.projected_savings;
   const goal = analysis.savings_goal;
   const progress = goal > 0 ? Math.min(Math.max(saved / goal, 0), 1) : 1;
@@ -67,3 +68,5 @@ export default function SavingsGoalMetric({ analysis }) {
     </Card>
   );
 }
+
+export default memo(SavingsGoalMetric);

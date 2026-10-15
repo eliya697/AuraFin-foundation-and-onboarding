@@ -150,7 +150,7 @@ export default function UpdateNotification() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 24, scale: 0.97, transition: { duration: 0.2 } }}
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-          className="fixed inset-x-4 bottom-4 z-[100] sm:inset-x-auto sm:bottom-6 sm:end-6 sm:w-[380px]"
+          className="gpu bottom-overlay fixed inset-x-4 z-[100] sm:inset-x-auto sm:end-6 sm:w-[380px]"
         >
           <div className="relative overflow-hidden rounded-3xl border border-turquoise/30 bg-white p-5 shadow-[0_2px_6px_rgb(0_33_71/0.06),0_24px_56px_-16px_rgb(0_33_71/0.28)]">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-turquoise to-mint" />
@@ -159,7 +159,7 @@ export default function UpdateNotification() {
               type="button"
               onClick={dismiss}
               aria-label="סגירה, אעדכן מאוחר יותר"
-              className="absolute end-3 top-3 grid h-8 w-8 place-items-center rounded-full text-navy/40 transition-colors hover:bg-mist hover:text-navy"
+              className="absolute end-1.5 top-1.5 grid h-12 w-12 place-items-center rounded-full text-navy/40 transition-colors hover:bg-mist hover:text-navy"
             >
               <X size={16} />
             </button>
@@ -168,7 +168,7 @@ export default function UpdateNotification() {
               <motion.span
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-turquoise to-mint text-white shadow-[0_10px_24px_-8px_rgb(0_196_204/0.6)]"
                 animate={{ rotate: [0, -8, 8, 0] }}
-                transition={{ duration: 1.2, delay: 0.4, repeat: Infinity, repeatDelay: 3.5 }}
+                transition={{ duration: 1.2, delay: 0.4, repeat: 2, repeatDelay: 3.5 }}
               >
                 <Sparkles size={20} />
               </motion.span>
@@ -193,7 +193,7 @@ export default function UpdateNotification() {
                 whileHover={reloading ? undefined : { y: -1 }}
                 whileTap={reloading ? undefined : { scale: 0.96 }}
                 transition={{ type: 'spring', stiffness: 520, damping: 28 }}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-turquoise to-mint px-5 py-3 font-bold text-white shadow-[0_12px_28px_-10px_rgb(0_196_204/0.65)] transition-[filter] hover:brightness-105 disabled:cursor-wait disabled:opacity-80"
+                className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-turquoise to-mint px-5 py-3 font-bold text-white shadow-[0_12px_28px_-10px_rgb(0_196_204/0.65)] transition-[filter] hover:brightness-105 disabled:cursor-wait disabled:opacity-80"
               >
                 {reloading ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} />}
                 {reloading ? 'מעדכנים…' : 'עדכן עכשיו'}
@@ -201,7 +201,7 @@ export default function UpdateNotification() {
               <button
                 type="button"
                 onClick={dismiss}
-                className="rounded-2xl px-4 py-3 text-sm font-semibold text-navy-soft transition-colors hover:bg-mist hover:text-navy"
+                className="min-h-12 rounded-2xl px-4 text-sm font-semibold text-navy-soft transition-colors hover:bg-mist hover:text-navy"
               >
                 אחר כך
               </button>

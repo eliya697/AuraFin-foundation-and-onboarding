@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 
+from .auth import create_verifier
 from .catalog import get_catalog
 from .coach import CoachService
 from .config import get_settings
@@ -24,12 +25,16 @@ async def lifespan(app: FastAPI):
     client = genai.Client() if settings.use_ai else None
     app.state.coach = CoachService(settings, client)
     app.state.coach_uses_ai = client is not None
+    app.state.verifier = create_verifier(settings)
     logger.info("Coach engine: %s", f"Gemini ({settings.model})" if client else "offline mock")
+    logger.info("Auth: %s", "Supabase sessions required" if app.state.verifier else "not enforced (no Supabase settings)")
     try:
         yield
     finally:
         if client is not None:
             await client.aio.aclose()
+        if app.state.verifier is not None:
+            await app.state.verifier.aclose()
 
 
 def create_app() -> FastAPI:
@@ -39,7 +44,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.origins,
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(router)

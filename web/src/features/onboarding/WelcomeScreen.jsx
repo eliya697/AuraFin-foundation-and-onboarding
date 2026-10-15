@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Bot, Droplets, PiggyBank } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
-import Logo from '../../components/ui/Logo.jsx';
 
 const HEADLINE = [
   { text: 'שולטים', accent: false },
@@ -61,25 +60,26 @@ export default function WelcomeScreen({ onStart }) {
   const Icon = slide.icon;
 
   return (
-    <div className="relative isolate min-h-dvh overflow-hidden">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-40 start-1/2 h-[28rem] w-[28rem] rounded-full bg-turquoise/10 blur-3xl" />
-        <div className="absolute bottom-0 end-0 h-80 w-80 rounded-full bg-mint/10 blur-3xl" />
-      </div>
-    <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-4 py-6 sm:px-8 sm:py-10">
+    <div className="relative isolate min-h-[calc(100dvh-var(--topbar-h))] overflow-hidden">
+      {/* Soft glows as radial gradients: same look as blurred blobs without a costly filter layer. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background:
+            'radial-gradient(28rem 28rem at 50% -6rem, rgb(0 196 204 / 0.12), transparent 70%), radial-gradient(20rem 20rem at 0% 100%, rgb(0 242 153 / 0.1), transparent 70%)',
+        }}
+      />
+    <div className="mx-auto flex min-h-[calc(100dvh-var(--topbar-h))] w-full max-w-5xl flex-col px-4 py-4 sm:px-8 sm:py-8">
 
-      <motion.header initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}>
-        <Logo />
-      </motion.header>
-
-      <div className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
+      <div className="grid flex-1 items-center gap-10 py-6 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
         <div>
           <motion.p
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-4 inline-flex items-center gap-2 rounded-full bg-mist px-4 py-1.5 text-sm font-semibold text-turquoise-dark"
           >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-mint" />
+            <span className="h-2 w-2 rounded-full bg-mint motion-safe:animate-pulse" />
             מאמן פיננסי מבוסס AI
           </motion.p>
 
@@ -87,8 +87,8 @@ export default function WelcomeScreen({ onStart }) {
             {HEADLINE.map((word, i) => (
               <motion.span
                 key={`${word.text}-${i}`}
-                initial={{ opacity: 0, y: 28, filter: 'blur(8px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.15 + i * 0.12, ease: [0.22, 1, 0.36, 1] }}
                 className={`me-3 inline-block ${word.accent ? 'text-gradient' : ''}`}
               >
@@ -166,7 +166,7 @@ export default function WelcomeScreen({ onStart }) {
             </AnimatePresence>
           </div>
 
-          <div className="mt-6 flex items-center justify-center gap-2.5">
+          <div className="mt-3 flex items-center justify-center">
             {SLIDES.map((s, i) => (
               <button
                 key={s.eyebrow}
@@ -174,18 +174,22 @@ export default function WelcomeScreen({ onStart }) {
                 onClick={() => goTo(i)}
                 aria-label={`מעבר לשקופית ${i + 1}`}
                 aria-current={i === index}
-                className="relative h-2.5 overflow-hidden rounded-full bg-navy/10 transition-all"
-                style={{ width: i === index ? 36 : 10 }}
+                className="grid h-12 min-w-12 place-items-center px-1"
               >
+                <span
+                  className="relative block h-2.5 overflow-hidden rounded-full bg-navy/10 transition-[width] duration-300"
+                  style={{ width: i === index ? 36 : 10 }}
+                >
                 {i === index && (
                   <motion.span
                     key={`${index}-${paused}`}
-                    className="absolute inset-y-0 start-0 rounded-full bg-turquoise"
-                    initial={{ width: paused ? '100%' : '0%' }}
-                    animate={{ width: '100%' }}
+                    className="absolute inset-0 origin-right rounded-full bg-turquoise"
+                    initial={{ scaleX: paused ? 1 : 0 }}
+                    animate={{ scaleX: 1 }}
                     transition={{ duration: paused ? 0 : AUTO_ADVANCE_MS / 1000, ease: 'linear' }}
                   />
                 )}
+                </span>
               </button>
             ))}
           </div>
