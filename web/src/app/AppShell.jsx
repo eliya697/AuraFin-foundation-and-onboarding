@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { House, PencilLine, ShieldCheck, UserRound } from 'lucide-react';
 import Logo from '../components/ui/Logo.jsx';
 import SyncBadge from '../components/SyncBadge.jsx';
+import { PrivacyButton, ThemeCycleButton } from '../components/DisplayToggles.jsx';
 import ErrorBoundary from '../components/ErrorBoundary.jsx';
 import Spinner from '../components/Spinner.jsx';
 import OnboardingFlow from '../features/onboarding/OnboardingFlow.jsx';
@@ -65,7 +66,7 @@ export default function AppShell() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="gpu sticky top-0 z-40 border-b border-navy/[0.06] bg-white/[0.97] pt-[env(safe-area-inset-top)] safe-x">
+      <header className="gpu sticky top-0 z-40 border-b border-navy/[0.06] bg-surface/[0.97] pt-[env(safe-area-inset-top)] safe-x">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-8">
           <button type="button" onClick={() => go('home')} className="-ms-1 flex min-h-12 items-center rounded-xl px-1" aria-label="AuraFin — מסך הבית">
             <Logo size={28} />
@@ -75,7 +76,11 @@ export default function AppShell() {
               <NavButton key={item.key} item={item} variant="top" />
             ))}
           </nav>
-          <SyncBadge compact />
+          <div className="flex items-center gap-0.5">
+            <SyncBadge compact />
+            <PrivacyButton />
+            <ThemeCycleButton />
+          </div>
         </div>
       </header>
 
@@ -91,7 +96,7 @@ export default function AppShell() {
 
       <nav
         aria-label="ניווט ראשי"
-        className="gpu fixed inset-x-0 bottom-0 z-40 border-t border-navy/[0.08] bg-white pb-[env(safe-area-inset-bottom)] safe-x md:hidden"
+        className="gpu fixed inset-x-0 bottom-0 z-40 border-t border-navy/[0.08] bg-surface pb-[env(safe-area-inset-bottom)] safe-x md:hidden"
       >
         <ul className="mx-auto flex h-[var(--bottom-nav-h)] max-w-md items-stretch justify-around px-2">
           {items.map((item) => (

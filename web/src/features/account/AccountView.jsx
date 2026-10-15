@@ -4,6 +4,7 @@ import Button from '../../components/ui/Button.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Reveal from '../../components/ui/Reveal.jsx';
 import SyncBadge from '../../components/SyncBadge.jsx';
+import { PrivacyButton, ThemeSegmented } from '../../components/DisplayToggles.jsx';
 import { ConfirmDialog } from '../../components/ui/Dialog.jsx';
 import { useAuth } from '../../state/AuthContext.jsx';
 import { useJourney, useSyncStatus } from '../../state/JourneyContext.jsx';
@@ -55,7 +56,7 @@ export default function AccountView({ onNavigate }) {
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
               {isAdmin && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-navy px-2.5 py-1 font-bold text-white">
+                <span className="inline-flex items-center gap-1 rounded-full bg-navy px-2.5 py-1 font-bold text-surface">
                   <ShieldCheck size={13} /> מנהל מערכת
                 </span>
               )}
@@ -68,6 +69,21 @@ export default function AccountView({ onNavigate }) {
             <CloudCheck size={14} /> סונכרן לאחרונה: {timeFormat.format(lastSyncedAt)}
           </p>
         )}
+      </Card>
+
+      <Card className="mt-4" padding="p-5 sm:p-6">
+        <h2 className="font-bold text-navy">תצוגה</h2>
+        <p className="mt-0.5 text-xs text-navy-soft">ערכת הצבעים נשמרת במכשיר הזה.</p>
+        <div className="mt-3">
+          <ThemeSegmented />
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-navy">הסתרת סכומים</span>
+            <span className="block text-xs text-navy-soft">מסתיר את כל הסכומים במסך — שימושי במקומות ציבוריים.</span>
+          </span>
+          <PrivacyButton />
+        </div>
       </Card>
 
       <Card className="mt-4" padding="p-2">

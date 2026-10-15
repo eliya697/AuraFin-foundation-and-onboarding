@@ -2,7 +2,9 @@ import { memo, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import Card from '../../components/ui/Card.jsx';
-import { formatCurrency, formatPercent } from '../../lib/budget.js';
+import { formatPercent } from '../../lib/budget.js';
+import { useMoney } from '../../state/privacy.js';
+import { useTheme } from '../../state/theme.js';
 
 const SEGMENTS = [
   { key: 'fixed', label: 'קבועות', detail: 'דיור וחשבונות', from: '#002147', to: '#2D4F7C' },
@@ -12,6 +14,8 @@ const SEGMENTS = [
   { key: 'children', label: 'ילדים', detail: 'גן, חוגים וצרכים', from: '#0B6E99', to: '#3FA7D6' },
   { key: 'custom', label: 'אישיות', detail: 'הוצאות שהוספתם', from: '#7C8DB5', to: '#B3BFDA' },
 ];
+// The navy "fixed" slice would vanish on the dark surface; it gets a lighter blue there.
+const DARK_OVERRIDES = { fixed: { from: '#4F74AD', to: '#86A6DA' } };
 
 function customDetail(items) {
   if (!items?.length) return 'הוצאות שהוספתם';
@@ -20,29 +24,36 @@ function customDetail(items) {
 }
 
 function DonutTooltip({ active, payload, total }) {
+  const money = useMoney();
   if (!active || !payload?.length) return null;
   const { label, value, detail } = payload[0].payload;
   return (
-    <div dir="rtl" className="rounded-2xl border border-navy/[0.06] bg-white px-4 py-3 shadow-[var(--shadow-lift)]">
+    <div dir="rtl" className="rounded-2xl border border-navy/[0.06] bg-surface px-4 py-3 shadow-[var(--shadow-lift)]">
       <p className="text-sm font-bold text-navy">{label}</p>
       <p className="text-xs text-navy-soft">{detail}</p>
-      <p className="mt-1 text-lg font-extrabold tabular-nums text-navy">{formatCurrency(value)}</p>
+      <p className="mt-1 text-lg font-extrabold tabular-nums text-navy">{money(value)}</p>
       <p className="text-sm font-semibold text-turquoise-dark">{formatPercent(total ? value / total : 0)} מההוצאות</p>
     </div>
   );
 }
 
 function ExpenseDonutChart({ breakdown = {}, customItems = [] }) {
+  const money = useMoney();
+  const { theme } = useTheme();
+  const segments = useMemo(
+    () => (theme === 'dark' ? SEGMENTS.map((s) => ({ ...s, ...DARK_OVERRIDES[s.key] })) : SEGMENTS),
+    [theme],
+  );
   const [activeIndex, setActiveIndex] = useState(null);
   // Segments with no spending (e.g. no children, no custom items) are left out of the chart.
   const data = useMemo(
     () =>
-      SEGMENTS.map((segment) => ({
+      segments.map((segment) => ({
         ...segment,
         detail: segment.key === 'custom' ? customDetail(customItems) : segment.detail,
         value: Number(breakdown?.[segment.key]) || 0,
       })).filter((segment) => segment.value > 0),
-    [breakdown, customItems],
+    [segments, breakdown, customItems],
   );
   const total = useMemo(() => data.reduce((sum, d) => sum + d.value, 0), [data]);
   const tooltip = useMemo(() => <DonutTooltip total={total} />, [total]);
@@ -56,7 +67,7 @@ function ExpenseDonutChart({ breakdown = {}, customItems = [] }) {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <defs>
-                {SEGMENTS.map((s) => (
+                {segments.map((s) => (
                   <linearGradient key={s.key} id={`donut-${s.key}`} x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0%" stopColor={s.from} />
                     <stop offset="100%" stopColor={s.to} />
@@ -93,7 +104,7 @@ function ExpenseDonutChart({ breakdown = {}, customItems = [] }) {
           <div dir="rtl" className="pointer-events-none absolute inset-0 grid place-items-center text-center">
             <motion.div key={active?.key ?? 'total'} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
               <p className="text-xs text-navy-soft">{active ? active.label : 'סך ההוצאות'}</p>
-              <p className="text-xl font-extrabold tabular-nums text-navy">{formatCurrency(active ? active.value : total)}</p>
+              <p className="text-xl font-extrabold tabular-nums text-navy">{money(active ? active.value : total)}</p>
               {active && <p className="text-xs font-semibold text-turquoise-dark">{formatPercent(total ? active.value / total : 0)}</p>}
             </motion.div>
           </div>
@@ -120,7 +131,7 @@ function ExpenseDonutChart({ breakdown = {}, customItems = [] }) {
                   <span className="block text-xs text-navy-soft">{d.detail}</span>
                 </span>
                 <span className="text-end">
-                  <span className="block text-sm font-bold tabular-nums text-navy">{formatCurrency(d.value)}</span>
+                  <span className="block text-sm font-bold tabular-nums text-navy">{money(d.value)}</span>
                   <span className="block text-xs tabular-nums text-navy-soft">{formatPercent(total ? d.value / total : 0)}</span>
                 </span>
               </button>

@@ -7,7 +7,6 @@ import CustomExpensesEditor from './CustomExpensesEditor.jsx';
 import { CATALOG, FIELDS, TRACKS } from '../../lib/catalog.js';
 import {
   buildSnapshot,
-  formatCurrency,
   gateProgress,
   getGateSteps,
   mapServerErrors,
@@ -21,6 +20,7 @@ import { ApiError, OfflineError, validateGate } from '../../services/api.js';
 import { useJourney } from '../../state/JourneyContext.jsx';
 import { BACK_PRIORITY, useBackHandler } from '../../hooks/useBackHandler.js';
 import { useLastDefined } from '../../hooks/useLastDefined.js';
+import { useMoney } from '../../state/privacy.js';
 
 const HINTS = {
   rent: 'גרים אצל ההורים או בדירה בבעלות בלי משכנתא? כתבו 0.',
@@ -37,6 +37,7 @@ const HINTS = {
  * refresh, a cancel or a remount can never leave the form and the store disagreeing.
  */
 export default function MandatoryExpenseGate() {
+  const money = useMoney();
   const { state, updateBudget, unlockDashboard, cancelEdit, reopenQuiz } = useJourney();
   // Kept from the last render while this screen animates out after the profile was cleared.
   const profile = useLastDefined(state.profile);
@@ -197,7 +198,7 @@ export default function MandatoryExpenseGate() {
       {/* Gate status */}
       {editing ? (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-turquoise/20 bg-turquoise/[0.06] px-4 py-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-turquoise-dark shadow-sm">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface text-turquoise-dark shadow-sm">
             <PencilLine size={17} />
           </span>
           <div className="min-w-0 flex-1">
@@ -210,7 +211,7 @@ export default function MandatoryExpenseGate() {
         </div>
       ) : (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-navy/[0.06] bg-mist px-4 py-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-navy shadow-sm">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface text-navy shadow-sm">
             <Lock size={17} />
           </span>
           <div className="min-w-0 flex-1">
@@ -252,7 +253,7 @@ export default function MandatoryExpenseGate() {
             >
               <span
                 className={`grid h-7 w-7 place-items-center rounded-full ${
-                  done ? 'bg-mint text-navy' : current ? 'bg-turquoise text-white' : 'bg-navy/[0.06]'
+                  done ? 'bg-mint text-navy-deep' : current ? 'bg-turquoise text-white' : 'bg-navy/[0.06]'
                 }`}
               >
                 {done ? <Check size={14} strokeWidth={3} /> : <Icon size={14} />}
@@ -317,7 +318,7 @@ export default function MandatoryExpenseGate() {
                       label={FIELDS[key].label}
                       hint={
                         key === 'unexpected'
-                          ? `המלצה ל${track.name}${profile.hasChildren ? ' עם ילדים' : ''}: לפחות ${formatCurrency(suggestedReserve)} בחודש.`
+                          ? `המלצה ל${track.name}${profile.hasChildren ? ' עם ילדים' : ''}: לפחות ${money(suggestedReserve)} בחודש.`
                           : HINTS[key]
                       }
                       value={values[key]}
@@ -394,6 +395,7 @@ export default function MandatoryExpenseGate() {
 }
 
 function Summary({ label, value, highlight = false }) {
+  const money = useMoney();
   return (
     <div className="min-w-0">
       <p className="text-xs text-navy-soft">{label}</p>
@@ -402,7 +404,7 @@ function Summary({ label, value, highlight = false }) {
           highlight ? (value < 0 ? 'text-danger' : 'text-turquoise-dark') : 'text-navy'
         }`}
       >
-        {formatCurrency(value)}
+        {money(value)}
       </p>
     </div>
   );

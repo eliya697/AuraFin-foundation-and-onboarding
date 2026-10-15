@@ -14,9 +14,9 @@ import GoalsPanel from '../goals/GoalsPanel.jsx';
 // Charts load on demand so the first dashboard paint doesn't wait for them.
 const AnalyticsPanel = lazy(() => import('../analytics/AnalyticsPanel.jsx'));
 import { GOALS, LIFE_STAGES } from '../../lib/catalog.js';
-import { formatCurrency } from '../../lib/budget.js';
 import { useJourney } from '../../state/JourneyContext.jsx';
 import { useLastDefined } from '../../hooks/useLastDefined.js';
+import { useMoney } from '../../state/privacy.js';
 
 const Stat = memo(function Stat({ icon: Icon, label, value, delay }) {
   return (
@@ -35,6 +35,7 @@ const Stat = memo(function Stat({ icon: Icon, label, value, delay }) {
 const sectionFallback = (error, reset) => <ErrorFallback onRetry={reset} title="לא הצלחנו להציג את החלק הזה" />;
 
 export default function Dashboard() {
+  const money = useMoney();
   const { state, startEdit } = useJourney();
   // While "עדכון נתונים" animates this screen out, the live unlock/profile can already be gone.
   // Render that last frame from the previous values instead of throwing (the old white screen).
@@ -58,7 +59,7 @@ export default function Dashboard() {
               <span className="inline-flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5 text-sm font-semibold text-navy">
                 <Baby size={15} className="text-turquoise-dark" />
                 {analysis.children_count === 1 ? 'ילד אחד' : `${analysis.children_count} ילדים`} ·{' '}
-                {formatCurrency(analysis.breakdown?.children)} בחודש
+                {money(analysis.breakdown?.children)} בחודש
               </span>
             )}
             <VerificationBadge mode={view.unlock.mode} />
@@ -76,9 +77,9 @@ export default function Dashboard() {
       </Reveal>
 
       <div className="mb-5 grid grid-cols-3 gap-2.5 sm:gap-5">
-        <Stat icon={Wallet} label="הכנסה" value={formatCurrency(view.budget.income)} delay={0.05} />
-        <Stat icon={Receipt} label="הוצאות" value={formatCurrency(analysis.total_expenses)} delay={0.1} />
-        <Stat icon={Target} label="יעד חודשי" value={formatCurrency(analysis.savings_goal)} delay={0.15} />
+        <Stat icon={Wallet} label="הכנסה" value={money(view.budget.income)} delay={0.05} />
+        <Stat icon={Receipt} label="הוצאות" value={money(analysis.total_expenses)} delay={0.1} />
+        <Stat icon={Target} label="יעד חודשי" value={money(analysis.savings_goal)} delay={0.15} />
       </div>
 
       <div className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">

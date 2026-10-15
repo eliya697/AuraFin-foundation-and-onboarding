@@ -67,7 +67,7 @@ export default function InstallBanner() {
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
           className="gpu top-overlay fixed inset-x-4 z-[90] sm:inset-x-auto sm:top-auto sm:bottom-6 sm:start-6 sm:w-[360px]"
         >
-          <div className="relative overflow-hidden rounded-3xl border border-turquoise/30 bg-white p-4 shadow-[0_2px_6px_rgb(0_33_71/0.06),0_24px_56px_-16px_rgb(0_33_71/0.28)]">
+          <div className="relative overflow-hidden rounded-3xl border border-turquoise/30 bg-surface p-4 shadow-[0_2px_6px_rgb(0_33_71/0.06),0_24px_56px_-16px_rgb(0_33_71/0.28)]">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-turquoise to-mint" />
             <button
               type="button"
@@ -107,12 +107,12 @@ export default function InstallBanner() {
             ) : (
               <ol className="mt-3 space-y-2 rounded-2xl bg-mist p-3 text-sm text-navy">
                 <li className="flex items-center gap-2">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white font-bold text-turquoise-dark">1</span>
-                  לוחצים על <Share size={16} className="text-royal" aria-label="שיתוף" /> בסרגל של Safari
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface font-bold text-turquoise-dark">1</span>
+                  לוחצים על <Share size={16} className="text-royal dark:text-[#8fb0ff]" aria-label="שיתוף" /> בסרגל של Safari
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white font-bold text-turquoise-dark">2</span>
-                  בוחרים <SquarePlus size={16} className="text-royal" aria-hidden="true" /> „הוספה למסך הבית"
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface font-bold text-turquoise-dark">2</span>
+                  בוחרים <SquarePlus size={16} className="text-royal dark:text-[#8fb0ff]" aria-hidden="true" /> „הוספה למסך הבית"
                 </li>
               </ol>
             )}

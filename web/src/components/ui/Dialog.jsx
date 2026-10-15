@@ -34,7 +34,7 @@ export default function Dialog({ open, onClose, title, description, children, ac
       {open && (
         <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6">
           <motion.div
-            className="absolute inset-0 bg-navy/40"
+            className="absolute inset-0 bg-scrim/40"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -49,7 +49,7 @@ export default function Dialog({ open, onClose, title, description, children, ac
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0, transition: { duration: 0.18 } }}
             transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-            className={`gpu relative w-full ${size === 'lg' ? 'max-w-3xl' : 'max-w-md'} rounded-t-[28px] bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[var(--shadow-lift)] sm:rounded-[28px] sm:pb-6`}
+            className={`gpu relative w-full ${size === 'lg' ? 'max-w-3xl' : 'max-w-md'} rounded-t-[28px] bg-surface p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[var(--shadow-lift)] sm:rounded-[28px] sm:pb-6`}
           >
             <h2 id={titleId} className="text-xl font-extrabold text-navy">
               {title}

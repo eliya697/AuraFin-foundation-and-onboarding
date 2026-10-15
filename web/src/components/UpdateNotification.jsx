@@ -152,7 +152,7 @@ export default function UpdateNotification() {
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
           className="gpu bottom-overlay fixed inset-x-4 z-[100] sm:inset-x-auto sm:end-6 sm:w-[380px]"
         >
-          <div className="relative overflow-hidden rounded-3xl border border-turquoise/30 bg-white p-5 shadow-[0_2px_6px_rgb(0_33_71/0.06),0_24px_56px_-16px_rgb(0_33_71/0.28)]">
+          <div className="relative overflow-hidden rounded-3xl border border-turquoise/30 bg-surface p-5 shadow-[0_2px_6px_rgb(0_33_71/0.06),0_24px_56px_-16px_rgb(0_33_71/0.28)]">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-turquoise to-mint" />
 
             <button

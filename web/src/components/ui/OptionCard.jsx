@@ -13,7 +13,7 @@ export default function OptionCard({ icon: Icon, title, description, selected, o
       transition={{ duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.97 }}
-      className={`relative flex w-full flex-col items-start gap-3 rounded-3xl border-2 bg-white p-5 text-start transition-[border-color,box-shadow] ${
+      className={`relative flex w-full flex-col items-start gap-3 rounded-3xl border-2 bg-surface p-5 text-start transition-[border-color,box-shadow] ${
         selected
           ? 'border-turquoise shadow-[var(--shadow-glow)]'
           : 'border-navy/[0.07] shadow-[var(--shadow-soft)] hover:border-turquoise/40'
