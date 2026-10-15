@@ -27,7 +27,13 @@ overwrite newer data. The top bar shows the sync state (נשמר / שומר… /
 3. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see `web/.env.example`). Set the same
    values as `AURAFIN_SUPABASE_URL` / `AURAFIN_SUPABASE_ANON_KEY` on the API host to require a valid,
    non-suspended session on `/api/gate/validate` and `/api/coach/plan` (`api/app/auth.py`).
-4. Sign up with **eliyamistriel1234@gmail.com** and confirm the email: the `admin_emails` allow-list makes
+4. **Confirmation emails (recommended):** Auth → Email Templates → *Confirm signup*, set the link to
+   `<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email">אישור ההרשמה</a>` (same idea for
+   *Reset password* with `type=recovery`). The app verifies `token_hash` itself (`services/backend/authCallback.js`),
+   so mail scanners that pre-open links can't burn the one-time token, and the link works in any browser.
+   The default `{{ .ConfirmationURL }}` link keeps working too; if it arrives already used/expired, the
+   login screen says so and offers "שליחת קישור אימות חדש".
+5. Sign up with **eliyamistriel1234@gmail.com** and confirm the email: the `admin_emails` allow-list makes
    that account an admin (an account that already exists is upgraded by the migration's backfill).
 
 **Roles.** Regular users can read and write only their own journey (RLS). Admins (confirmed email, role
