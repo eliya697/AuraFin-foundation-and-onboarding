@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { TransactionsProvider } from '../src/state/TransactionsContext.jsx';
+import { TransactionsProvider, useTransactionsSync } from '../src/state/TransactionsContext.jsx';
+import { createMemoryStore } from '../src/services/sync/localStore.js';
 import TransactionsPanel from '../src/features/transactions/TransactionsPanel.jsx';
 
 const profile = { lifeStage: 'employee', goal: 'house', hasChildren: false, childrenCount: 0, trackId: 'first_home' };
@@ -35,10 +36,16 @@ const existing = {
   deletedAt: null,
 };
 
-const renderPanel = (backend) =>
+function SyncProbe() {
+  const { status, pending } = useTransactionsSync();
+  return <output data-testid="sync">{`${status}:${pending}`}</output>;
+}
+
+const renderPanel = (backend, store = createMemoryStore()) =>
   render(
-    <TransactionsProvider userId="u1" backend={backend}>
+    <TransactionsProvider userId="u1" backend={backend} store={store}>
       <TransactionsPanel budget={budget} profile={profile} />
+      <SyncProbe />
     </TransactionsProvider>,
   );
 
@@ -61,7 +68,7 @@ describe('TransactionsPanel', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'שמירה' }));
 
     expect(await screen.findByText('קפה')).toBeTruthy();
-    expect(backend.upsertTransactions).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(backend.upsertTransactions).toHaveBeenCalledTimes(1), { timeout: 3000 });
     const [, [saved]] = backend.upsertTransactions.mock.calls[0];
     expect(saved).toMatchObject({ amount: 18, merchant: 'קפה', kind: 'expense', budgetKey: 'other' });
     expect(saved.id).toMatch(/^[0-9a-f-]{36}$/);
@@ -86,19 +93,30 @@ describe('TransactionsPanel', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /מחיקה/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: /לחצו שוב למחיקה/ }));
     await waitFor(() => expect(screen.queryByText('פיצה')).toBeNull());
-    expect(backend.stored[0].deletedAt).toEqual(expect.any(Number));
+    await waitFor(() => expect(backend.stored[0].deletedAt).toEqual(expect.any(Number)), { timeout: 3000 });
   });
 
-  it('rolls back and shows the error when the backend refuses', async () => {
+  it('keeps a change on the device and queues it when the backend refuses', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const backend = fakeBackend([existing]);
-    backend.upsertTransactions.mockRejectedValueOnce(new Error('השמירה נכשלה בבדיקה'));
     renderPanel(backend);
     fireEvent.click(await screen.findByText('פיצה'));
+    backend.upsertTransactions.mockRejectedValue(new Error('500'));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('בית עסק / תיאור'), { target: { value: 'סושי' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'שמירה' }));
-    expect(await within(dialog).findByText('השמירה נכשלה בבדיקה')).toBeTruthy();
-    expect(screen.queryByText('סושי')).toBeNull();
-    expect(screen.getAllByText('פיצה').length).toBeGreaterThan(0);
+
+    expect(await screen.findByText('סושי')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('sync').textContent).toBe('error:1'), { timeout: 3000 });
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('shows saved transactions from the device store before the cloud answers', async () => {
+    const store = createMemoryStore();
+    await store.putRows('transactions', 'u1', [{ ...existing, merchant: 'מהמכשיר' }]);
+    const backend = fakeBackend();
+    backend.listTransactions.mockImplementation(() => new Promise(() => {})); // never answers
+    renderPanel(backend, store);
+    expect(await screen.findByText('מהמכשיר')).toBeTruthy();
   });
 });

@@ -1,6 +1,6 @@
 # Transactions layer — design note
 
-Status: **draft, awaiting scope confirmation**. Nothing below is built yet.
+Status: scope approved. Steps 1–2 built (migration 0003, CRUD + list UI, offline outbox); steps 3–5 pending.
 
 ## Why a migration is needed first
 
@@ -85,6 +85,12 @@ New sections under the existing dashboard. The existing cards stay unchanged.
   them into the local copy, newest `client_updated_at` wins. This is the same rule as `chooseJourney`.
 - **Badge.** `SyncBadge` gets a "N ממתינים" (N pending) count from the outbox. Its existing looks stay the same.
 - `localBackend.js` (dev) implements the same CRUD methods on top of localStorage.
+- Code: `web/src/services/sync/localStore.js` (IndexedDB, in-memory fallback) and
+  `web/src/services/sync/syncEngine.js` (entity-generic, reused by savings goals).
+- Known limit: a row the server rejects permanently (e.g. a constraint violation) keeps the whole batch
+  retrying with backoff (badge shows "error · N pending"). Client-side validation makes this rare;
+  CSV import (step 3) must pre-dedupe `import_hash` so two devices importing the same file offline
+  don't hit the unique index.
 
 ## CSV import (Hebrew bank and credit-card exports)
 

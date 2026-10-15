@@ -1,6 +1,7 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { CloudAlert, CloudCheck, CloudOff, Loader2 } from 'lucide-react';
 import { useSyncStatus } from '../state/JourneyContext.jsx';
+import { useTransactionsSync } from '../state/TransactionsContext.jsx';
 
 const LOOKS = {
   loading: { icon: Loader2, text: 'מסנכרן…', spin: true, className: 'text-navy-soft' },
@@ -12,12 +13,37 @@ const LOOKS = {
 
 const SAVING_DELAY_MS = 700;
 
+// When the journey and the transactions outbox disagree, the badge shows the one that matters most.
+const PRIORITY = ['error', 'offline', 'saving', 'pending', 'loading', 'synced'];
+
+/** One status for the journey sync and the transactions outbox ('local' = not synced, ignored). */
+export function combineSyncStatus(journey, transactions) {
+  const statuses = [journey, transactions].filter((s) => s && s !== 'local');
+  return PRIORITY.find((s) => statuses.includes(s)) ?? 'synced';
+}
+
+/** Label with the number of changes waiting for the cloud, e.g. "לא מקוון · 3 ממתינים". */
+export function badgeText(shown, pending) {
+  const look = LOOKS[shown] ?? LOOKS.synced;
+  if (!pending || (shown !== 'offline' && shown !== 'error')) return look.text;
+  const count = pending === 1 ? 'שינוי אחד ממתין' : `${pending} ממתינים`;
+  return shown === 'offline' ? `לא מקוון · ${count}` : `${look.text} · ${count}`;
+}
+
 /**
  * Cloud-sync indicator. Short saves never show a spinner (it only appears if a save takes longer
  * than SAVING_DELAY_MS), so typing doesn't make the badge flicker.
  */
 function SyncBadge({ compact = false }) {
-  const { status, retry, cloud } = useSyncStatus();
+  const journey = useSyncStatus();
+  const tx = useTransactionsSync();
+  const cloud = journey.cloud || tx.cloud;
+  const status = combineSyncStatus(journey.cloud ? journey.status : 'local', tx.cloud ? tx.status : 'local');
+  const pending = tx.cloud ? tx.pending : 0;
+  const retry = useCallback(() => {
+    journey.retry();
+    tx.retry();
+  }, [journey, tx]);
   const busy = status === 'pending' || status === 'saving';
   const [shown, setShown] = useState(busy ? 'synced' : status);
 
@@ -33,10 +59,16 @@ function SyncBadge({ compact = false }) {
   if (!cloud) return null;
   const look = LOOKS[shown] ?? LOOKS.synced;
   const Icon = look.icon;
+  const text = badgeText(shown, pending);
   const content = (
     <>
       <Icon size={16} className={look.spin ? 'animate-spin' : ''} aria-hidden="true" />
-      <span className={compact ? 'sr-only sm:not-sr-only' : ''}>{look.text}</span>
+      {pending > 0 && (shown === 'offline' || shown === 'error') && (
+        <span aria-hidden="true" className="tabular-nums sm:hidden">
+          {pending}
+        </span>
+      )}
+      <span className={compact ? 'sr-only sm:not-sr-only' : ''}>{text}</span>
     </>
   );
   const className = `inline-flex min-h-12 min-w-12 items-center justify-center gap-1.5 rounded-full px-2 text-xs font-semibold ${look.className}`;
@@ -49,7 +81,7 @@ function SyncBadge({ compact = false }) {
     );
   }
   return (
-    <span role="status" aria-live="polite" className={className} title={look.text}>
+    <span role="status" aria-live="polite" className={className} title={text}>
       {content}
     </span>
   );

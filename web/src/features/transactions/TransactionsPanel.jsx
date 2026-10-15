@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Loader2, Plus, RotateCw } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Loader2, Plus } from 'lucide-react';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import TransactionDialog from './TransactionDialog.jsx';
@@ -10,7 +10,7 @@ const PAGE = 8;
 
 /** Latest transactions with quick add / edit / delete. */
 export default function TransactionsPanel({ budget, profile }) {
-  const { transactions, status, save, remove, reload } = useTransactions();
+  const { transactions, loading, save, remove } = useTransactions();
   const lines = useMemo(() => budgetLines(budget, profile), [budget, profile]);
   const [limit, setLimit] = useState(PAGE);
   const [dialog, setDialog] = useState({ open: false, transaction: null });
@@ -33,16 +33,9 @@ export default function TransactionsPanel({ budget, profile }) {
         </Button>
       </div>
 
-      {status === 'loading' && transactions.length === 0 ? (
+      {loading ? (
         <div className="grid min-h-24 place-items-center">
           <Loader2 className="animate-spin text-turquoise" size={24} aria-label="טוען תנועות" />
-        </div>
-      ) : status === 'error' && transactions.length === 0 ? (
-        <div className="rounded-2xl bg-mist p-4 text-center text-sm text-navy-soft">
-          לא הצלחנו לטעון את התנועות.
-          <Button variant="ghost" size="sm" onClick={reload} className="ms-1">
-            <RotateCw size={14} /> נסו שוב
-          </Button>
         </div>
       ) : transactions.length === 0 ? (
         <p className="rounded-2xl bg-mist p-4 text-center text-sm text-navy-soft">
