@@ -9,6 +9,7 @@ import ExpenseDonutChart from './ExpenseDonutChart.jsx';
 import AISavingsPlanView from './AISavingsPlanView.jsx';
 import VerificationBadge from './VerificationBadge.jsx';
 import TransactionsPanel from '../transactions/TransactionsPanel.jsx';
+import GoalsPanel from '../goals/GoalsPanel.jsx';
 
 // Charts load on demand so the first dashboard paint doesn't wait for them.
 const AnalyticsPanel = lazy(() => import('../analytics/AnalyticsPanel.jsx'));
@@ -92,6 +93,12 @@ export default function Dashboard() {
       <div className="mb-5">
         <ErrorBoundary label="Transactions" fallback={sectionFallback}>
           <TransactionsPanel budget={view.budget} profile={view.profile} />
+        </ErrorBoundary>
+      </div>
+
+      <div className="mb-5">
+        <ErrorBoundary label="Savings goals" fallback={sectionFallback}>
+          <GoalsPanel budget={view.budget} profile={view.profile} />
         </ErrorBoundary>
       </div>
 

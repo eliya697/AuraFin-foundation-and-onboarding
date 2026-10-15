@@ -2,10 +2,12 @@ import { createClient } from '@supabase/supabase-js';
 import { BackendError, toBackendError } from './errors.js';
 import { clearAuthParams, initialAuthCallback } from './authCallback.js';
 import { fromRow, toRow } from '../../lib/transactions.js';
+import { goalFromRow, goalToRow } from '../../lib/goals.js';
 
 const TX_PAGE = 500;
 const TX_COLUMNS =
   'id, kind, amount, budget_key, merchant, note, occurred_at, source, import_hash, client_updated_at, deleted_at, updated_at';
+const GOAL_COLUMNS = 'id, name, target, saved, deadline, client_updated_at, deleted_at, updated_at';
 
 /**
  * Production backend: Supabase Auth for sessions, Postgres (RLS) for per-user journeys and roles.
@@ -191,6 +193,22 @@ export function createSupabaseBackend(url, anonKey) {
         const rows = transactions.slice(i, i + TX_PAGE).map((tx) => toRow(tx, userId));
         unwrap(await client.from('transactions').upsert(rows, { onConflict: 'id' }), 'שמירת התנועות בענן נכשלה.');
       }
+    },
+
+    /** Same contract as listTransactions / upsertTransactions, for public.savings_goals. */
+    async listGoals(userId, { since = 0 } = {}) {
+      let query = client.from('savings_goals').select(GOAL_COLUMNS).eq('user_id', userId);
+      if (since) query = query.gt('updated_at', new Date(since).toISOString());
+      const rows = unwrap(await query.order('updated_at').limit(1000), 'טעינת יעדי החיסכון נכשלה.');
+      return (rows ?? []).map(goalFromRow).filter(Boolean);
+    },
+
+    async upsertGoals(userId, goals) {
+      if (!goals.length) return;
+      unwrap(
+        await client.from('savings_goals').upsert(goals.map((goal) => goalToRow(goal, userId)), { onConflict: 'id' }),
+        'שמירת יעדי החיסכון בענן נכשלה.',
+      );
     },
 
     admin: {

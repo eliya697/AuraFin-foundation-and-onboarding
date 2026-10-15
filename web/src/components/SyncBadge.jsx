@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { CloudAlert, CloudCheck, CloudOff, Loader2 } from 'lucide-react';
 import { useSyncStatus } from '../state/JourneyContext.jsx';
 import { useTransactionsSync } from '../state/TransactionsContext.jsx';
+import { useGoalsSync } from '../state/GoalsContext.jsx';
 
 const LOOKS = {
   loading: { icon: Loader2, text: 'מסנכרן…', spin: true, className: 'text-navy-soft' },
@@ -13,12 +14,12 @@ const LOOKS = {
 
 const SAVING_DELAY_MS = 700;
 
-// When the journey and the transactions outbox disagree, the badge shows the one that matters most.
+// When the journey and the outboxes (transactions, goals) disagree, the badge shows the one that matters most.
 const PRIORITY = ['error', 'offline', 'saving', 'pending', 'loading', 'synced'];
 
-/** One status for the journey sync and the transactions outbox ('local' = not synced, ignored). */
-export function combineSyncStatus(journey, transactions) {
-  const statuses = [journey, transactions].filter((s) => s && s !== 'local');
+/** One status for the journey sync and the outboxes ('local' = not synced, ignored). */
+export function combineSyncStatus(...sources) {
+  const statuses = sources.filter((s) => s && s !== 'local');
   return PRIORITY.find((s) => statuses.includes(s)) ?? 'synced';
 }
 
@@ -37,13 +38,16 @@ export function badgeText(shown, pending) {
 function SyncBadge({ compact = false }) {
   const journey = useSyncStatus();
   const tx = useTransactionsSync();
-  const cloud = journey.cloud || tx.cloud;
-  const status = combineSyncStatus(journey.cloud ? journey.status : 'local', tx.cloud ? tx.status : 'local');
-  const pending = tx.cloud ? tx.pending : 0;
+  const goals = useGoalsSync();
+  const sources = [journey, tx, goals];
+  const cloud = sources.some((s) => s.cloud);
+  const status = combineSyncStatus(...sources.map((s) => (s.cloud ? s.status : 'local')));
+  const pending = (tx.cloud ? tx.pending : 0) + (goals.cloud ? goals.pending : 0);
   const retry = useCallback(() => {
     journey.retry();
     tx.retry();
-  }, [journey, tx]);
+    goals.retry();
+  }, [journey, tx, goals]);
   const busy = status === 'pending' || status === 'saving';
   const [shown, setShown] = useState(busy ? 'synced' : status);
 

@@ -20,3 +20,10 @@ describe('badgeText', () => {
     expect(badgeText('saving', 4)).toBe('שומר…');
   });
 });
+
+describe('combineSyncStatus with goals', () => {
+  it('takes any number of sources', () => {
+    expect(combineSyncStatus('synced', 'synced', 'error')).toBe('error');
+    expect(combineSyncStatus('synced', 'local', 'pending')).toBe('pending');
+  });
+});

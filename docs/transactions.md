@@ -1,6 +1,6 @@
 # Transactions layer — design note
 
-Status: scope approved. Steps 1–4 built (migration 0004, CRUD + list UI, offline outbox, CSV import, analytics); step 5 pending.
+Status: scope approved. Steps 1–5 built (migration 0004, CRUD + list UI, offline outbox, CSV import, analytics, savings goals). Push notifications: see docs/push-notifications.md (proposal only).
 
 ## Why a migration is needed first
 

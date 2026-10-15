@@ -4,6 +4,7 @@ import AppShell from '../src/app/AppShell.jsx';
 import { AuthProvider } from '../src/state/AuthContext.jsx';
 import { JourneyProvider } from '../src/state/JourneyContext.jsx';
 import { TransactionsProvider } from '../src/state/TransactionsContext.jsx';
+import { GoalsProvider } from '../src/state/GoalsContext.jsx';
 import { dashboardJourney } from './fixtures.js';
 
 const USER = { id: 'user-1', email: 'user@example.com', role: 'user', suspended: false, emailConfirmed: true };
@@ -28,7 +29,9 @@ function renderApp() {
       {/* No cloud backend: exercises local persistence only. */}
       <JourneyProvider userId={USER.id} backend={null}>
         <TransactionsProvider userId={USER.id} backend={null}>
-          <AppShell />
+          <GoalsProvider userId={USER.id} backend={null}>
+            <AppShell />
+          </GoalsProvider>
         </TransactionsProvider>
       </JourneyProvider>
     </AuthProvider>,
