@@ -12,6 +12,8 @@ import UpdateNotification from './components/UpdateNotification.jsx';
 import InstallBanner from './components/InstallBanner.jsx';
 import { useAuth } from './state/AuthContext.jsx';
 import { JourneyProvider } from './state/JourneyContext.jsx';
+import { TransactionsProvider } from './state/TransactionsContext.jsx';
+import { GoalsProvider } from './state/GoalsContext.jsx';
 import { warmUp } from './services/api.js';
 
 /**
@@ -47,7 +49,11 @@ function Guarded() {
 
   return (
     <JourneyProvider key={user.id} userId={user.id} backend={backend}>
-      <AppShell />
+      <TransactionsProvider key={user.id} userId={user.id} backend={backend}>
+        <GoalsProvider key={user.id} userId={user.id} backend={backend}>
+          <AppShell />
+        </GoalsProvider>
+      </TransactionsProvider>
     </JourneyProvider>
   );
 }

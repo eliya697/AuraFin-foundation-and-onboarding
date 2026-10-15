@@ -9,6 +9,8 @@ import { ADMIN_EMAIL } from './config.js';
 const USERS_KEY = 'aurafin:dev:users';
 const SESSION_KEY = 'aurafin:dev:session';
 const journeyKey = (id) => `aurafin:dev:journey:${id}`;
+const transactionsKey = (id) => `aurafin:dev:transactions:${id}`;
+const goalsKey = (id) => `aurafin:dev:goals:${id}`;
 const LATENCY_MS = 250;
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -46,6 +48,27 @@ export function createLocalBackend() {
     if (me?.role !== 'admin' || me.suspended) throw new BackendError(messageFor('forbidden'), { code: 'forbidden' });
   };
   const updateUser = (id, patch) => saveUsers(users().map((u) => (u.id === id ? { ...u, ...patch } : u)));
+
+  // Synced rows (transactions, goals): `syncedAt` stands in for the server's updated_at, and an older
+  // write never replaces a newer one (the keep_newest_client_write trigger).
+  async function listSynced(key, { since = 0 } = {}) {
+    await wait();
+    return read(key, [])
+      .filter((row) => row.syncedAt > since)
+      .sort((a, b) => a.syncedAt - b.syncedAt);
+  }
+
+  async function upsertSynced(key, rows) {
+    await wait();
+    if (current()?.suspended) throw new BackendError(messageFor('user_banned'), { code: 'user_banned' });
+    const byId = new Map(read(key, []).map((row) => [row.id, row]));
+    const now = Date.now();
+    for (const row of rows) {
+      const stored = byId.get(row.id);
+      if (!stored || row.updatedAt >= stored.updatedAt) byId.set(row.id, { ...row, syncedAt: now });
+    }
+    write(key, [...byId.values()]);
+  }
 
   return {
     kind: 'local',
@@ -136,6 +159,12 @@ export function createLocalBackend() {
       if (current()?.suspended) throw new BackendError(messageFor('user_banned'), { code: 'user_banned' });
       write(journeyKey(userId), { state, stage, updatedAt });
     },
+
+    // Same contract as the Supabase backend.
+    listTransactions: (userId, options) => listSynced(transactionsKey(userId), options),
+    upsertTransactions: (userId, rows) => upsertSynced(transactionsKey(userId), rows),
+    listGoals: (userId, options) => listSynced(goalsKey(userId), options),
+    upsertGoals: (userId, rows) => upsertSynced(goalsKey(userId), rows),
 
     admin: {
       async listUsers() {

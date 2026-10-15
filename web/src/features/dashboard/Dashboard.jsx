@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import { Baby, PencilLine, Receipt, Target, UserRoundPen, Wallet } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
 import Card from '../../components/ui/Card.jsx';
@@ -8,6 +8,11 @@ import SavingsGoalMetric from './SavingsGoalMetric.jsx';
 import ExpenseDonutChart from './ExpenseDonutChart.jsx';
 import AISavingsPlanView from './AISavingsPlanView.jsx';
 import VerificationBadge from './VerificationBadge.jsx';
+import TransactionsPanel from '../transactions/TransactionsPanel.jsx';
+import GoalsPanel from '../goals/GoalsPanel.jsx';
+
+// Charts load on demand so the first dashboard paint doesn't wait for them.
+const AnalyticsPanel = lazy(() => import('../analytics/AnalyticsPanel.jsx'));
 import { GOALS, LIFE_STAGES } from '../../lib/catalog.js';
 import { formatCurrency } from '../../lib/budget.js';
 import { useJourney } from '../../state/JourneyContext.jsx';
@@ -82,6 +87,26 @@ export default function Dashboard() {
         </ErrorBoundary>
         <ErrorBoundary label="Expense chart" fallback={sectionFallback} resetKeys={[analysis]}>
           <ExpenseDonutChart breakdown={analysis.breakdown} customItems={view.budget.custom} />
+        </ErrorBoundary>
+      </div>
+
+      <div className="mb-5">
+        <ErrorBoundary label="Transactions" fallback={sectionFallback}>
+          <TransactionsPanel budget={view.budget} profile={view.profile} />
+        </ErrorBoundary>
+      </div>
+
+      <div className="mb-5">
+        <ErrorBoundary label="Savings goals" fallback={sectionFallback}>
+          <GoalsPanel budget={view.budget} profile={view.profile} />
+        </ErrorBoundary>
+      </div>
+
+      <div className="mb-5">
+        <ErrorBoundary label="Analytics" fallback={sectionFallback}>
+          <Suspense fallback={<div className="h-64 animate-pulse rounded-[28px] bg-mist" aria-label="טוען ניתוח" />}>
+            <AnalyticsPanel budget={view.budget} profile={view.profile} />
+          </Suspense>
         </ErrorBoundary>
       </div>
 
