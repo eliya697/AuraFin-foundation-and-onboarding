@@ -3,7 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="theme-color" content="#ffffff" />
+    <!-- Theme before first paint (no light flash in dark mode). Same rule as src/state/theme.js. -->
+    <script>
+      (function () {
+        var theme = 'light';
+        try {
+          var pref = localStorage.getItem('aurafin:theme');
+          if (pref === 'dark' || pref === 'light') theme = pref;
+          else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+        } catch (e) {}
+        document.documentElement.setAttribute('data-theme', theme);
+        if (theme === 'dark') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#13213a');
+        try {
+          if (localStorage.getItem('aurafin:privacy') === '1') document.documentElement.setAttribute('data-privacy', '');
+        } catch (e) {}
+      })();
+    </script>
     <meta name="description" content="מאמן פיננסי מבוסס AI: מעקב דליפות, תוכנית חיסכון אישית ויעד חודשי ברור." />
     <title>AuraFin</title>
 
@@ -24,10 +40,10 @@
       href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/AuraFin-foundation-and-onboarding/assets/index-DjTxZlG4.js"></script>
-    <link rel="stylesheet" crossorigin href="/AuraFin-foundation-and-onboarding/assets/index-CW8hSlvH.css">
+    <script type="module" crossorigin src="/AuraFin-foundation-and-onboarding/assets/index-Bhy-5FzI.js"></script>
+    <link rel="stylesheet" crossorigin href="/AuraFin-foundation-and-onboarding/assets/index-BugzMajX.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
   </body>
 </html>
