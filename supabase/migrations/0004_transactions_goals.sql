@@ -1,4 +1,5 @@
 -- AuraFin 2.0 · transactions (actuals) and savings goals
+-- Numbered 0004: the security branch adds 0003_rls_audit.sql. Every table here enables RLS, as that audit requires.
 -- Run after 0002 with `supabase db push`, or paste into the Supabase SQL editor. Re-runnable.
 --
 -- 0001 tied transactions/ai_insights to public.profiles, which 2.0 users never get (their data lives

@@ -142,7 +142,7 @@ export function normalizeTransaction(raw) {
 const occurredAtOf = (date) => `${date}T12:00:00.000Z`;
 const toIso = (ms) => new Date(ms).toISOString();
 
-/** App transaction → public.transactions row (see supabase/migrations/0003_transactions_goals.sql). */
+/** App transaction → public.transactions row (see supabase/migrations/0004_transactions_goals.sql). */
 export function toRow(tx, userId) {
   return {
     id: tx.id,

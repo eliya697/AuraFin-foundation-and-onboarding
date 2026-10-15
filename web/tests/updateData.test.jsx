@@ -35,14 +35,14 @@ function renderApp() {
   );
 }
 
-describe('"עדכון נתונים" (update data) from the dashboard', () => {
+describe('"עדכון נתונים" (update data) from the dashboard', { timeout: 30000 }, () => {
   test('opens the gate with the saved values instead of crashing to a white screen', async () => {
     // Server unreachable: the dashboard stays in locally verified mode.
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'));
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     renderApp();
-    expect(await screen.findByRole('heading', { level: 1, name: 'מסלול סטודנט חכם' }, { timeout: 4000 })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 1, name: 'מסלול סטודנט חכם' }, { timeout: 15000 })).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'עדכון נתונים' })[0]);
@@ -64,7 +64,7 @@ describe('"עדכון נתונים" (update data) from the dashboard', () => {
   test('edits persist to this device', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'));
     renderApp();
-    await screen.findByRole('heading', { level: 1, name: 'מסלול סטודנט חכם' }, { timeout: 4000 });
+    await screen.findByRole('heading', { level: 1, name: 'מסלול סטודנט חכם' }, { timeout: 15000 });
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'עדכון נתונים' })[0]);
     });

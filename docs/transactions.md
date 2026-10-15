@@ -1,6 +1,6 @@
 # Transactions layer — design note
 
-Status: scope approved. Steps 1–3 built (migration 0003, CRUD + list UI, offline outbox, CSV import); steps 4–5 pending.
+Status: scope approved. Steps 1–4 built (migration 0004, CRUD + list UI, offline outbox, CSV import, analytics); step 5 pending.
 
 ## Why a migration is needed first
 
@@ -10,7 +10,7 @@ from a 2.0 user would fail the FK**. The `monthly_category_totals` view inner-jo
 would return nothing. Nothing in `web/` or `api/` reads or writes the table today, so it can be
 reshaped safely.
 
-`0003_transactions_goals.sql` (additive, idempotent, re-runnable):
+`0004_transactions_goals.sql` (additive, idempotent, re-runnable):
 
 - Re-point `transactions.user_id` (and `ai_insights.user_id`) at `auth.users(id) on delete cascade`.
 - Add the columns the 2.0 client needs (below); relax the old `category` enum column to nullable
@@ -114,6 +114,21 @@ New sections under the existing dashboard. The existing cards stay unchanged.
    direction, amount) are flagged "possibly entered manually" and start unselected.
    Code: `web/src/lib/csvImport.js`, `web/src/features/transactions/CsvImportDialog.jsx`.
 
+## Analytics (as built)
+
+`web/src/lib/analytics.js` (pure) + `web/src/features/analytics/AnalyticsPanel.jsx` (lazy chunk).
+A month picker drives three things: income / expenses / net for the month, a six-month income-vs-
+expenses trend ending at that month (grouped bars, time right-to-left), and spending per budget line
+as horizontal bars with a tick at the planned amount, plus a planned-vs-actual table (lines over plan
+get an icon + "מעל התכנון"). More than 7 lines fold into "שאר הסעיפים" in the chart; the table
+keeps them all. Colours were validated with the dataviz palette checker: light expenses `#1f4fd1`,
+income `#00a3aa`, plan tick `#7c8db5`; dark (theme branch surface `#13213a`) `#5b82f0` / `#00a3aa` /
+`#8a9ab8`, scoped as CSS variables with a `:root[data-theme='dark']` override.
+
+Note: the existing donut chart imports Recharts statically, so Recharts is still part of the
+Dashboard chunk. Lazy-loading the panel keeps the analytics code out of it, but Recharts itself
+only leaves the first dashboard load if the donut is lazy-loaded too.
+
 ## Savings goals
 
 - Progress is `saved / target`.
@@ -128,7 +143,7 @@ New sections under the existing dashboard. The existing cards stay unchanged.
 
 ## Build order (each step: Vitest for the pure logic + `npm test` + `npm run build` + api `pytest`)
 
-1. Migration 0003, plus transactions CRUD in both backends and a simple list/add UI (online-only path).
+1. Migration 0004, plus transactions CRUD in both backends and a simple list/add UI (online-only path).
 2. IndexedDB outbox and local cache, replay, pending count in SyncBadge.
 3. CSV import: decoding, header detection, mapping, preview, dedupe, then queue.
 4. Analytics with lazy-loaded Recharts.
