@@ -1,0 +1,1 @@
+import{m as r,j as m}from"./index-CLLJsQct.js";function c({delay:t=0,y:i=18,className:o="",as:n="div",children:a,...e}){const s=r[n];return m.jsx(s,{initial:{opacity:0,y:i},animate:{opacity:1,y:0},transition:{duration:.5,delay:t,ease:[.22,1,.36,1]},className:o,...e,children:a})}export{c as R};
