@@ -20,7 +20,7 @@ const MoneyInput = forwardRef(function MoneyInput({ name, label, hint, value, er
       </label>
       <motion.div
         animate={controls}
-        className={`flex items-center rounded-2xl border-2 bg-white transition-colors focus-within:ring-4 ${
+        className={`flex items-center rounded-2xl border-2 bg-surface transition-colors focus-within:ring-4 ${
           error
             ? 'border-danger/70 bg-danger/[0.03] focus-within:ring-danger/10'
             : 'border-navy/10 focus-within:border-turquoise focus-within:ring-turquoise/15'
@@ -38,7 +38,7 @@ const MoneyInput = forwardRef(function MoneyInput({ name, label, hint, value, er
           value={value}
           onChange={(e) => onChange(sanitizeAmount(e.target.value), name)}
           onBlur={() => onBlur?.(name)}
-          className={`w-full bg-transparent px-4 font-bold tabular-nums text-navy outline-none placeholder:font-normal placeholder:text-navy/25 ${
+          className={`money-input w-full bg-transparent px-4 font-bold tabular-nums text-navy outline-none placeholder:font-normal placeholder:text-navy/25 ${
             large ? 'py-4 text-3xl' : 'py-3.5 text-lg'
           }`}
         />

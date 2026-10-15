@@ -14,7 +14,7 @@ const SIZES = {
 
 const VARIANTS = {
   primary: 'bg-turquoise text-white shadow-[var(--shadow-glow)] disabled:bg-navy/10 disabled:text-navy/35 disabled:shadow-none',
-  secondary: 'bg-white text-navy border border-navy/10 hover:border-turquoise/50 hover:text-turquoise-dark disabled:text-navy/30',
+  secondary: 'bg-surface text-navy border border-navy/10 hover:border-turquoise/50 hover:text-turquoise-dark disabled:text-navy/30',
   ghost: 'bg-transparent text-navy-soft hover:bg-mist hover:text-navy disabled:text-navy/30',
   danger: 'bg-danger text-white disabled:bg-navy/10 disabled:text-navy/35',
 };

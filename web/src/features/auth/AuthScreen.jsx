@@ -299,7 +299,7 @@ function Field({ id, label, error, trailing, ...inputProps }) {
         {label}
       </label>
       <div
-        className={`flex items-center rounded-2xl border-2 bg-white transition-colors focus-within:ring-4 ${
+        className={`flex items-center rounded-2xl border-2 bg-surface transition-colors focus-within:ring-4 ${
           error ? 'border-danger/70 focus-within:ring-danger/10' : 'border-navy/10 focus-within:border-turquoise focus-within:ring-turquoise/15'
         }`}
       >

@@ -50,7 +50,7 @@ function ChildrenCounter({ value, onChange }) {
             onClick={() => onChange(clamp(value - 1))}
             disabled={value <= 1}
             aria-label="פחות ילדים"
-            className="grid h-12 w-12 place-items-center rounded-2xl border border-navy/10 bg-white text-navy shadow-sm disabled:opacity-40"
+            className="grid h-12 w-12 place-items-center rounded-2xl border border-navy/10 bg-surface text-navy shadow-sm disabled:opacity-40"
           >
             <Minus size={18} />
           </motion.button>
@@ -62,7 +62,7 @@ function ChildrenCounter({ value, onChange }) {
               const digits = e.target.value.replace(/\D/g, '');
               onChange(digits === '' ? 0 : clamp(Number(digits)));
             }}
-            className="w-16 rounded-2xl border-2 border-navy/10 bg-white py-2 text-center text-2xl font-extrabold tabular-nums text-navy outline-none focus:border-turquoise"
+            className="w-16 rounded-2xl border-2 border-navy/10 bg-surface py-2 text-center text-2xl font-extrabold tabular-nums text-navy outline-none focus:border-turquoise"
           />
           <motion.button
             type="button"

@@ -7,7 +7,8 @@ import Dialog, { ConfirmDialog } from '../../components/ui/Dialog.jsx';
 import { useAuth } from '../../state/AuthContext.jsx';
 import { normalizeJourney, resolveStage } from '../../state/journeyModel.js';
 import { GOALS, LIFE_STAGES, TRACKS } from '../../lib/catalog.js';
-import { formatCurrency, previewTotals } from '../../lib/budget.js';
+import { previewTotals } from '../../lib/budget.js';
+import { useMoney } from '../../state/privacy.js';
 
 const STAGES = {
   welcome: { label: 'היכרות', className: 'bg-navy/[0.06] text-navy-soft' },
@@ -85,7 +86,7 @@ export default function AdminPanel() {
         ))}
       </div>
 
-      <label className="mt-5 flex min-h-12 items-center gap-2 rounded-2xl border-2 border-navy/10 bg-white px-4 focus-within:border-turquoise">
+      <label className="mt-5 flex min-h-12 items-center gap-2 rounded-2xl border-2 border-navy/10 bg-surface px-4 focus-within:border-turquoise">
         <Search size={18} className="shrink-0 text-navy/40" />
         <span className="sr-only">חיפוש לפי אימייל</span>
         <input
@@ -127,13 +128,14 @@ export default function AdminPanel() {
 }
 
 const UserRow = memo(function UserRow({ user, isMe, onSelect }) {
+  const money = useMoney();
   const stage = STAGES[user.stage];
   return (
     <li className="cv-row">
       <button
         type="button"
         onClick={() => onSelect(user.id)}
-        className="flex min-h-16 w-full items-center gap-3 rounded-3xl border border-navy/[0.07] bg-white p-3.5 text-start shadow-[var(--shadow-soft)] transition-colors hover:border-turquoise/40"
+        className="flex min-h-16 w-full items-center gap-3 rounded-3xl border border-navy/[0.07] bg-surface p-3.5 text-start shadow-[var(--shadow-soft)] transition-colors hover:border-turquoise/40"
       >
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mist font-extrabold text-turquoise-dark">
           {(user.email[0] ?? '?').toUpperCase()}
@@ -144,7 +146,7 @@ const UserRow = memo(function UserRow({ user, isMe, onSelect }) {
             {isMe && <span className="ms-1 text-xs font-semibold text-navy-soft">(אתם)</span>}
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-            {user.role === 'admin' && <span className="rounded-full bg-navy px-2 py-0.5 font-bold text-white">מנהל</span>}
+            {user.role === 'admin' && <span className="rounded-full bg-navy px-2 py-0.5 font-bold text-surface">מנהל</span>}
             {user.suspended && <span className="rounded-full bg-danger/10 px-2 py-0.5 font-bold text-danger">מושעה</span>}
             {!user.emailConfirmed && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-800">לא אומת</span>}
             <span className={`rounded-full px-2 py-0.5 font-semibold ${stage?.className ?? 'bg-navy/[0.06] text-navy-soft'}`}>
@@ -154,7 +156,7 @@ const UserRow = memo(function UserRow({ user, isMe, onSelect }) {
           </span>
         </span>
         <span className="hidden shrink-0 text-end text-xs text-navy-soft sm:block">
-          <span className="block font-bold tabular-nums text-navy">{user.income === null ? '—' : formatCurrency(user.income)}</span>
+          <span className="block font-bold tabular-nums text-navy">{user.income === null ? '—' : money(user.income)}</span>
           עודכן {formatDate(user.journeyUpdatedAt)}
         </span>
       </button>
@@ -163,6 +165,7 @@ const UserRow = memo(function UserRow({ user, isMe, onSelect }) {
 });
 
 function UserDetails({ user, isMe, onClose, onChanged }) {
+  const money = useMoney();
   const { backend } = useAuth();
   const [journey, setJourney] = useState(undefined); // undefined = loading, null = none
   const [confirm, setConfirm] = useState(null); // { action, title, description, danger, label }
@@ -225,9 +228,9 @@ function UserDetails({ user, isMe, onClose, onChanged }) {
                 <Item label="שלב בחיים" value={summary.lifeStage} />
                 <Item label="מטרה" value={summary.goal} />
                 <Item label="ילדים" value={journey.profile?.hasChildren ? String(journey.profile.childrenCount) : journey.profile ? 'אין' : null} />
-                <Item label="הכנסה" value={summary.totals ? formatCurrency(summary.totals.income) : null} />
-                <Item label="הוצאות" value={summary.totals ? formatCurrency(summary.totals.expenses) : null} />
-                <Item label="נשאר" value={summary.totals ? formatCurrency(summary.totals.remaining) : null} />
+                <Item label="הכנסה" value={summary.totals ? money(summary.totals.income) : null} />
+                <Item label="הוצאות" value={summary.totals ? money(summary.totals.expenses) : null} />
+                <Item label="נשאר" value={summary.totals ? money(summary.totals.remaining) : null} />
                 <Item label="אימות" value={journey.unlock ? (journey.unlock.mode === 'server' ? 'שרת' : 'במכשיר') : null} />
                 <Item label="תוכנית" value={journey.plan?.data?.plan?.headline} wide />
               </dl>

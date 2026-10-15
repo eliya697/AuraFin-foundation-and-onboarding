@@ -154,7 +154,7 @@ export default function WelcomeScreen({ onStart }) {
                 }}
                 aria-roledescription="slide"
                 aria-label={`${index + 1} מתוך ${SLIDES.length}`}
-                className={`absolute inset-0 cursor-grab touch-pan-y overflow-hidden rounded-[32px] border border-navy/[0.06] bg-gradient-to-b ${slide.tint} bg-white p-7 shadow-[var(--shadow-lift)] active:cursor-grabbing sm:p-9`}
+                className={`absolute inset-0 cursor-grab touch-pan-y overflow-hidden rounded-[32px] border border-navy/[0.06] bg-gradient-to-b ${slide.tint} bg-surface p-7 shadow-[var(--shadow-lift)] active:cursor-grabbing sm:p-9`}
               >
                 <span className={`grid h-14 w-14 place-items-center rounded-2xl ${slide.iconBg} text-white shadow-lg`}>
                   <Icon size={26} />

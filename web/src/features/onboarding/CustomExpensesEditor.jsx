@@ -4,12 +4,14 @@ import Button from '../../components/ui/Button.jsx';
 import MoneyInput from '../../components/ui/MoneyInput.jsx';
 import TextInput from '../../components/ui/TextInput.jsx';
 import { CUSTOM_LIMITS } from '../../lib/catalog.js';
-import { customKey, formatCurrency, newCustomExpense } from '../../lib/budget.js';
+import { customKey, newCustomExpense } from '../../lib/budget.js';
+import { useMoney } from '../../state/privacy.js';
 
 const SUGGESTIONS = ['חדר כושר', 'ביטוח רכב', 'תרומה קבועה', 'חיות מחמד', 'טיפול / פסיכולוג'];
 
 /** Dynamic list of user-titled monthly expenses. Rows are validated like any other gate field. */
 export default function CustomExpensesEditor({ items, onChange, errorFor, onBlurField, shakeSignal, registerRef, listError }) {
+  const money = useMoney();
   const atLimit = items.length >= CUSTOM_LIMITS.maxItems;
   const total = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const usedTitles = new Set(items.map((item) => item.title.trim()));
@@ -49,7 +51,7 @@ export default function CustomExpensesEditor({ items, onChange, errorFor, onBlur
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="rounded-3xl border border-navy/[0.07] bg-white p-4 shadow-[var(--shadow-soft)]"
+              className="rounded-3xl border border-navy/[0.07] bg-surface p-4 shadow-[var(--shadow-soft)]"
             >
               <div className="mb-1 flex items-center justify-between">
                 <span className="text-xs font-bold text-turquoise-dark">הוצאה {index + 1}</span>
@@ -116,7 +118,7 @@ export default function CustomExpensesEditor({ items, onChange, errorFor, onBlur
 
       {items.length > 0 && (
         <p className="mt-4 text-sm text-navy-soft">
-          סך הוצאות אישיות: <span className="font-bold tabular-nums text-navy">{formatCurrency(total)}</span>
+          סך הוצאות אישיות: <span className="font-bold tabular-nums text-navy">{money(total)}</span>
           {atLimit && ` · הגעתם למקסימום של ${CUSTOM_LIMITS.maxItems} הוצאות`}
         </p>
       )}

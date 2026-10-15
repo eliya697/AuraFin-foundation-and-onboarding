@@ -4,13 +4,14 @@ import Markdown from 'react-markdown';
 import { Ban, Bot, Check, CircleDot, Droplets, RefreshCw, Sparkles } from 'lucide-react';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { buildSnapshot, formatCurrency } from '../../lib/budget.js';
+import { buildSnapshot } from '../../lib/budget.js';
 import { CATALOG } from '../../lib/catalog.js';
 import { analyzeBudget } from '../../lib/analysis.js';
 import { buildOfflinePlan } from '../../lib/offlinePlan.js';
 import { OfflineError, fetchSavingsPlan, hasBackend } from '../../services/api.js';
 import { fingerprintOf, useJourney } from '../../state/JourneyContext.jsx';
 import { useLastDefined } from '../../hooks/useLastDefined.js';
+import { useMaskText, useMoney } from '../../state/privacy.js';
 
 const LOADING_STEPS = ['מנתחים את ההכנסות וההוצאות…', 'מזהים דליפות לפי המסלול שלכם…', 'בונים רשימת "לא לקנות" לחודש…', 'מנסחים את התוכנית…'];
 
@@ -99,6 +100,8 @@ function LoadingState() {
 }
 
 const DoNotBuyList = memo(function DoNotBuyList({ items }) {
+  const money = useMoney();
+  const mask = useMaskText();
   const [resisted, setResisted] = useState({});
   const saved = items.reduce((sum, item, i) => sum + (resisted[i] ? Number(item.estimated_saving) || 0 : 0), 0);
 
@@ -116,7 +119,7 @@ const DoNotBuyList = memo(function DoNotBuyList({ items }) {
               exit={{ opacity: 0 }}
               className="rounded-full bg-mint/20 px-3 py-1 text-sm font-bold text-navy"
             >
-              ויתרתם על {formatCurrency(saved)}
+              ויתרתם על {money(saved)}
             </motion.span>
           )}
         </AnimatePresence>
@@ -137,23 +140,23 @@ const DoNotBuyList = memo(function DoNotBuyList({ items }) {
                 onClick={() => setResisted((prev) => ({ ...prev, [i]: !prev[i] }))}
                 aria-pressed={done}
                 className={`flex min-h-12 w-full items-center gap-3 rounded-2xl border p-3.5 text-start transition-colors ${
-                  done ? 'border-mint/50 bg-mint/10' : 'border-navy/[0.07] bg-white hover:border-turquoise/40'
+                  done ? 'border-mint/50 bg-mint/10' : 'border-navy/[0.07] bg-surface hover:border-turquoise/40'
                 }`}
               >
                 <span
                   className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 transition-colors ${
-                    done ? 'border-mint bg-mint text-navy' : 'border-navy/15 text-transparent'
+                    done ? 'border-mint bg-mint text-navy-deep' : 'border-navy/15 text-transparent'
                   }`}
                 >
                   <Check size={14} strokeWidth={3} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block font-bold text-navy ${done ? 'line-through decoration-mint decoration-2' : ''}`}>
-                    {item.item}
+                    {mask(item.item)}
                   </span>
-                  <span className="block text-sm text-navy-soft">{item.reason}</span>
+                  <span className="block text-sm text-navy-soft">{mask(item.reason)}</span>
                 </span>
-                <span className="shrink-0 text-sm font-bold tabular-nums text-turquoise-dark">{formatCurrency(item.estimated_saving)}</span>
+                <span className="shrink-0 text-sm font-bold tabular-nums text-turquoise-dark">{money(item.estimated_saving)}</span>
               </motion.button>
             </motion.li>
           );
@@ -165,10 +168,13 @@ const DoNotBuyList = memo(function DoNotBuyList({ items }) {
 });
 
 const PlanMarkdown = memo(function PlanMarkdown({ markdown }) {
-  return <Markdown components={markdownComponents}>{markdown}</Markdown>;
+  const mask = useMaskText();
+  return <Markdown components={markdownComponents}>{mask(markdown)}</Markdown>;
 });
 
 export default function AISavingsPlanView() {
+  const money = useMoney();
+  const mask = useMaskText();
   const { state: liveState, storePlan } = useJourney();
   // Same exit-animation guard as the dashboard: never derive from a profile that was just cleared.
   const state = useLastDefined(liveState.profile ? liveState : null);
@@ -221,9 +227,9 @@ export default function AISavingsPlanView() {
 
   return (
     <Card initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} padding="p-0" className="cv-auto overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/[0.06] bg-gradient-to-l from-turquoise/[0.08] via-white to-mint/[0.08] px-5 py-4 sm:px-7">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/[0.06] bg-gradient-to-l from-turquoise/[0.08] via-surface to-mint/[0.08] px-5 py-4 sm:px-7">
         <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-navy text-white">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-navy text-surface">
             <Bot size={19} />
           </span>
           <div>
@@ -258,7 +264,7 @@ export default function AISavingsPlanView() {
         {status === 'done' && plan && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
             <p className="mb-6 rounded-2xl bg-gradient-to-l from-turquoise to-mint px-5 py-4 text-lg font-extrabold text-white shadow-[var(--shadow-glow)]">
-              {plan.headline}
+              {mask(plan.headline)}
             </p>
 
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
@@ -283,15 +289,15 @@ export default function AISavingsPlanView() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <span className="text-xs font-bold text-turquoise-dark">{LEAK_LABELS[leak.category]}</span>
-                            <p className="font-bold text-navy">{leak.title}</p>
+                            <p className="font-bold text-navy">{mask(leak.title)}</p>
                           </div>
                           {leak.monthly_saving > 0 && (
-                            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold tabular-nums text-navy shadow-sm">
-                              +{formatCurrency(leak.monthly_saving)}/חודש
+                            <span className="shrink-0 rounded-full bg-surface px-2.5 py-1 text-xs font-bold tabular-nums text-navy shadow-sm">
+                              +{money(leak.monthly_saving)}/חודש
                             </span>
                           )}
                         </div>
-                        <p className="mt-1 text-sm leading-relaxed text-navy-soft">{leak.explanation}</p>
+                        <p className="mt-1 text-sm leading-relaxed text-navy-soft">{mask(leak.explanation)}</p>
                       </motion.li>
                     ))}
                   </ul>

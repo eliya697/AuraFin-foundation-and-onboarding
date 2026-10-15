@@ -31,7 +31,7 @@ const TextInput = forwardRef(function TextInput(
         aria-describedby={error ? errorId : undefined}
         onChange={(e) => onChange(e.target.value, name)}
         onBlur={() => onBlur?.(name)}
-        className={`w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-lg font-semibold text-navy outline-none transition-colors placeholder:font-normal placeholder:text-navy/30 focus:ring-4 ${
+        className={`w-full rounded-2xl border-2 bg-surface px-4 py-3.5 text-lg font-semibold text-navy outline-none transition-colors placeholder:font-normal placeholder:text-navy/30 focus:ring-4 ${
           error
             ? 'border-danger/70 bg-danger/[0.03] focus:ring-danger/10'
             : 'border-navy/10 focus:border-turquoise focus:ring-turquoise/15'

@@ -44,7 +44,7 @@ export function ErrorFallback({ fullScreen = false, onRetry, title = 'משהו �
   const reload = () => window.location.reload();
   return (
     <div role="alert" className={fullScreen ? 'grid min-h-dvh place-items-center px-4 safe-x' : 'py-2'}>
-      <div className="mx-auto w-full max-w-md rounded-[28px] border border-danger/20 bg-white p-6 text-center shadow-[var(--shadow-soft)]">
+      <div className="mx-auto w-full max-w-md rounded-[28px] border border-danger/20 bg-surface p-6 text-center shadow-[var(--shadow-soft)]">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-danger/10 text-danger">
           <TriangleAlert size={22} />
         </span>

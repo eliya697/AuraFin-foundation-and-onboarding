@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* `dark:` follows the resolved app theme (data-theme on <html>), not only the OS setting. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Colour tokens. Components use these utilities (text-navy, bg-surface, bg-mist…); dark mode only
+ * re-points the variables below, so no component needs per-theme classes.
+ *   navy / navy-soft = primary / secondary ink · surface = cards & bars · mist = subtle fills
+ *   navy-deep = ink that stays dark (on mint) · scrim = dialog backdrop · page = body background
+ */
 @theme {
   --color-navy: #002147;
   --color-navy-soft: #3d5a80;
@@ -9,10 +18,35 @@
   --color-royal: #1f4fd1;
   --color-mist: #f3f8fb;
   --color-danger: #e5484d;
+  --color-surface: #ffffff;
+  --color-page: #ffffff;
+  --color-navy-deep: #002147;
+  --color-scrim: #002147;
   --font-sans: "Heebo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --shadow-soft: 0 1px 2px rgb(0 33 71 / 0.04), 0 12px 40px -12px rgb(0 33 71 / 0.14);
   --shadow-lift: 0 2px 4px rgb(0 33 71 / 0.05), 0 24px 56px -16px rgb(0 33 71 / 0.22);
   --shadow-glow: 0 12px 32px -10px rgb(0 196 204 / 0.55);
+}
+
+/* Dark theme: same token names, night palette (contrast-checked against surface/page). */
+:root[data-theme='dark'] {
+  --color-navy: #e8eef7;
+  --color-navy-soft: #a9bad1;
+  --color-turquoise-dark: #2fd5dc;
+  --color-mist: #1b2c48;
+  --color-danger: #ff6b70;
+  --color-surface: #13213a;
+  --color-page: #0b1526;
+  --color-scrim: #000000;
+  --color-amber-50: #3a2b0c;
+  --color-amber-100: #4a360e;
+  --color-amber-300: #8d6a1c;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 40px -12px rgb(0 0 0 / 0.5);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.6);
+  --shadow-glow: 0 12px 32px -10px rgb(0 196 204 / 0.35);
 }
 
 /* Layout tokens shared by the shell and fixed overlays. */
@@ -44,9 +78,13 @@
     scroll-padding-bottom: calc(var(--app-bottom-inset) + env(safe-area-inset-bottom) + 1rem);
   }
 
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+  }
+
   body {
     min-height: 100dvh;
-    background-color: #ffffff;
+    background-color: var(--color-page);
     color: var(--color-navy);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -116,6 +154,11 @@
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Privacy Eye: amount fields are dotted out while not being edited (see src/state/privacy.js). */
+  :root[data-privacy] .money-input:not(:focus) {
+    -webkit-text-security: disc;
   }
 
   /* Fixed overlays: above the bottom tab bar and the home indicator. */
