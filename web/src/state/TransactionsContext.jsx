@@ -72,12 +72,14 @@ export function TransactionsProvider({ userId, backend = null, store = null, chi
 
   const save = useCallback(async (tx) => (await ready()).mutate(tx), [ready]);
   const remove = useCallback(async (tx) => (await ready()).mutate(deletedTransaction(tx)), [ready]);
+  const saveMany = useCallback(async (list) => (await ready()).mutateMany(list), [ready]);
   const retry = useCallback(() => engineRef.current?.retry(), []);
 
   const transactions = useMemo(() => visibleTransactions(snapshot.rows), [snapshot.rows]);
+  // `all` includes tombstones: CSV dedupe must also skip imports the user deleted.
   const value = useMemo(
-    () => ({ transactions, loading: !snapshot.ready, save, remove }),
-    [transactions, snapshot.ready, save, remove],
+    () => ({ userId, transactions, all: snapshot.rows, loading: !snapshot.ready, save, saveMany, remove }),
+    [userId, transactions, snapshot.rows, snapshot.ready, save, saveMany, remove],
   );
   const sync = useMemo(
     () => ({ status: snapshot.status, pending: snapshot.pending, lastSyncedAt: snapshot.lastSyncedAt, retry, cloud: Boolean(backend) }),

@@ -1,8 +1,9 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Loader2, Plus } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, FileUp, Loader2, Plus } from 'lucide-react';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import TransactionDialog from './TransactionDialog.jsx';
+import CsvImportDialog from './CsvImportDialog.jsx';
 import { budgetLines, formatTxAmount, formatTxDate, lineLabel, resolveLineKey } from '../../lib/transactions.js';
 import { useTransactions } from '../../state/TransactionsContext.jsx';
 
@@ -14,6 +15,7 @@ export default function TransactionsPanel({ budget, profile }) {
   const lines = useMemo(() => budgetLines(budget, profile), [budget, profile]);
   const [limit, setLimit] = useState(PAGE);
   const [dialog, setDialog] = useState({ open: false, transaction: null });
+  const [importing, setImporting] = useState(false);
 
   const openNew = useCallback(() => setDialog({ open: true, transaction: null }), []);
   const openEdit = useCallback((transaction) => setDialog({ open: true, transaction }), []);
@@ -28,9 +30,14 @@ export default function TransactionsPanel({ budget, profile }) {
           <h2 className="text-lg font-extrabold text-navy sm:text-xl">תנועות</h2>
           <p className="text-sm text-navy-soft">מה באמת יצא ונכנס, מול התקציב שתכננתם.</p>
         </div>
-        <Button size="sm" onClick={openNew}>
-          <Plus size={16} /> הוספה
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setImporting(true)} aria-label="ייבוא מקובץ CSV">
+            <FileUp size={16} /> <span className="hidden min-[400px]:inline">ייבוא</span>
+          </Button>
+          <Button size="sm" onClick={openNew}>
+            <Plus size={16} /> הוספה
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -56,6 +63,7 @@ export default function TransactionsPanel({ budget, profile }) {
         </>
       )}
 
+      <CsvImportDialog open={importing} lines={lines} onClose={() => setImporting(false)} />
       <TransactionDialog open={dialog.open} transaction={dialog.transaction} lines={lines} onSave={save} onDelete={remove} onClose={close} />
     </Card>
   );

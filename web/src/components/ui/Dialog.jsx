@@ -7,7 +7,7 @@ import { BACK_PRIORITY, useBackHandler } from '../../hooks/useBackHandler.js';
  * Accessible modal: bottom sheet on phones (respects the home-indicator safe area), centred card on
  * larger screens. Closes on the back button, Escape and backdrop tap.
  */
-export default function Dialog({ open, onClose, title, description, children, actions, dismissible = true }) {
+export default function Dialog({ open, onClose, title, description, children, actions, dismissible = true, size = 'md' }) {
   const titleId = useId();
   const panelRef = useRef(null);
 
@@ -49,7 +49,7 @@ export default function Dialog({ open, onClose, title, description, children, ac
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0, transition: { duration: 0.18 } }}
             transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-            className="gpu relative w-full max-w-md rounded-t-[28px] bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[var(--shadow-lift)] sm:rounded-[28px] sm:pb-6"
+            className={`gpu relative w-full ${size === 'lg' ? 'max-w-3xl' : 'max-w-md'} rounded-t-[28px] bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[var(--shadow-lift)] sm:rounded-[28px] sm:pb-6`}
           >
             <h2 id={titleId} className="text-xl font-extrabold text-navy">
               {title}

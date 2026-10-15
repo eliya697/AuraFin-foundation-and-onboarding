@@ -197,3 +197,16 @@ describe('syncEngine', () => {
     expect((await store.loadRows('transactions', 'u2')).map((r) => r.id)).toEqual(['b']);
   });
 });
+
+describe('mutateMany', () => {
+  it('queues a whole import in one store write and one upsert', async () => {
+    const { engine, store, remote } = setup();
+    await engine.start();
+    await engine.mutateMany([row('a', 1), row('b', 1), row('c', 1)]);
+    expect(engine.getSnapshot().pending).toBe(3);
+    expect(await store.loadOutbox(USER)).toHaveLength(3);
+    await vi.runOnlyPendingTimersAsync();
+    expect(remote.upsert).toHaveBeenCalledTimes(1);
+    expect(remote.upsert.mock.calls[0][0]).toHaveLength(3);
+  });
+});

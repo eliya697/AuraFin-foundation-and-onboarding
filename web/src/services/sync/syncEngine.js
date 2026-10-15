@@ -4,7 +4,7 @@
  *
  * Rows: { id, updatedAt (device ms of the last edit), deletedAt, syncedAt? (server ms) , ... }.
  *
- *   mutate(row)  writes the row and an outbox entry to the device store (atomically), updates the
+ *   mutate(row)  (and mutateMany(rows)) writes the row and an outbox entry to the device store (atomically), updates the
  *                in-memory list at once and schedules a flush. Never waits for the network.
  *   sync()       flush (send every outbox entry in one idempotent upsert) then pull (rows changed on
  *                the server since the last pull). Single-flight; called on start, after mutations,
@@ -101,21 +101,25 @@ export function createSyncEngine({
     return sync();
   }
 
-  async function mutate(row) {
-    rows.set(row.id, row);
+  /** Writes rows (one edit or a whole CSV import) to the device and queues them in one go. */
+  async function mutateMany(list) {
+    if (!list.length) return;
+    list.forEach((row) => rows.set(row.id, row));
     if (!remote) {
       emit();
-      await store.putRows(entity, userId, [row]);
+      await store.putRows(entity, userId, list);
       return;
     }
-    const entry = { key: entryKey(row.id), entity, row, queuedAt: row.updatedAt };
-    outbox.set(entry.key, entry);
+    const entries = list.map((row) => ({ key: entryKey(row.id), entity, row, queuedAt: row.updatedAt }));
+    entries.forEach((entry) => outbox.set(entry.key, entry));
     if (!isOnline()) status = 'offline';
     else if (status !== 'saving' && status !== 'error') status = 'pending';
     emit();
     schedule(debounceMs);
-    await store.queueMutation(entity, userId, row, entry);
+    await store.queueMutations(entity, userId, list, entries);
   }
+
+  const mutate = (row) => mutateMany([row]);
 
   async function flush() {
     const batch = [...outbox.values()];
@@ -207,6 +211,7 @@ export function createSyncEngine({
     start,
     refresh,
     mutate,
+    mutateMany,
     sync,
     retry,
     getSnapshot: () => snapshot,

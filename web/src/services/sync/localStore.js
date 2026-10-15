@@ -31,9 +31,9 @@ export function createMemoryStore() {
     async putRows(entity, userId, rows) {
       for (const row of rows) put(entity, userId, row.id, row);
     },
-    async queueMutation(entity, userId, row, entry) {
-      put(entity, userId, row.id, row);
-      put('outbox', userId, entry.key, entry);
+    async queueMutations(entity, userId, rows, entries) {
+      for (const row of rows) put(entity, userId, row.id, row);
+      for (const entry of entries) put('outbox', userId, entry.key, entry);
     },
     async loadOutbox(userId) {
       return all('outbox', userId);
@@ -99,11 +99,11 @@ function createIdbStore(db) {
       run([entity], 'readwrite', (s) => {
         for (const row of rows) s[entity].put(record(userId, row.id, row));
       }),
-    // Atomic: the row and its outbox entry are written together or not at all.
-    queueMutation: (entity, userId, row, entry) =>
+    // Atomic: the rows and their outbox entries are written together or not at all.
+    queueMutations: (entity, userId, rows, entries) =>
       run([entity, 'outbox'], 'readwrite', (s) => {
-        s[entity].put(record(userId, row.id, row));
-        s.outbox.put(record(userId, entry.key, entry));
+        for (const row of rows) s[entity].put(record(userId, row.id, row));
+        for (const entry of entries) s.outbox.put(record(userId, entry.key, entry));
       }),
     loadOutbox: (userId) => all('outbox', userId),
     removeOutbox: (userId, keys) =>

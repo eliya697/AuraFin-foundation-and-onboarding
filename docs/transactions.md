@@ -1,6 +1,6 @@
 # Transactions layer — design note
 
-Status: scope approved. Steps 1–2 built (migration 0003, CRUD + list UI, offline outbox); steps 3–5 pending.
+Status: scope approved. Steps 1–3 built (migration 0003, CRUD + list UI, offline outbox, CSV import); steps 4–5 pending.
 
 ## Why a migration is needed first
 
@@ -89,8 +89,7 @@ New sections under the existing dashboard. The existing cards stay unchanged.
   `web/src/services/sync/syncEngine.js` (entity-generic, reused by savings goals).
 - Known limit: a row the server rejects permanently (e.g. a constraint violation) keeps the whole batch
   retrying with backoff (badge shows "error · N pending"). Client-side validation makes this rare;
-  CSV import (step 3) must pre-dedupe `import_hash` so two devices importing the same file offline
-  don't hit the unique index.
+  CSV import avoids the unique-index case with deterministic ids (see CSV import, point 7).
 
 ## CSV import (Hebrew bank and credit-card exports)
 
@@ -105,8 +104,15 @@ New sections under the existing dashboard. The existing cards stay unchanged.
 5. **Dedupe.** `import_hash = sha256(date | amount | normalized merchant | occurrence index)`.
    The occurrence index keeps two genuinely identical charges on the same day. Rows already
    imported are flagged in the preview and skipped.
-6. Every row gets `budget_key = 'other'` unless a merchant → line rule the user saved earlier matches. Rows can be
-   reassigned in the preview. The rows are then queued through the outbox.
+6. Budget line per row: the line the user last chose for the same merchant (learned from their
+   transactions, no separate rules table), else a line whose name appears in the merchant as whole words
+   ("חברת החשמל" → חשמל), else `other`. Rows can be reassigned in the preview, then are queued
+   through the outbox in one batch.
+7. As built: the row id is derived from `sha256(userId | import_hash)`, so importing the same file on
+   two offline devices converges on the same rows (upsert on id) instead of hitting the
+   `(user_id, import_hash)` unique index. Rows matching a hand-typed transaction (same date,
+   direction, amount) are flagged "possibly entered manually" and start unselected.
+   Code: `web/src/lib/csvImport.js`, `web/src/features/transactions/CsvImportDialog.jsx`.
 
 ## Savings goals
 

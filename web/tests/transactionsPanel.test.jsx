@@ -120,3 +120,39 @@ describe('TransactionsPanel', () => {
     expect(await screen.findByText('מהמכשיר')).toBeTruthy();
   });
 });
+
+describe('CSV import', () => {
+  const CSV = ['תאריך עסקה,שם בית העסק,סכום חיוב', '01/10/2026,סופר יודה,"1,200.00"', '02/10/2026,פיצה,42.5', 'xx,שבור,10'].join('\n');
+
+  it('maps, previews (skipping bad rows and earlier imports) and queues the rest', async () => {
+    const backend = fakeBackend();
+    renderPanel(backend);
+    await screen.findByText(/עוד אין תנועות/);
+
+    const importOnce = async () => {
+      fireEvent.click(screen.getByRole('button', { name: /ייבוא מקובץ CSV/ }));
+      const dialog = await screen.findByRole('dialog');
+      const file = new File([CSV], 'max.csv', { type: 'text/csv' });
+      fireEvent.change(within(dialog).getByLabelText('קובץ CSV'), { target: { files: [file] } });
+      fireEvent.click(await within(dialog).findByRole('button', { name: 'המשך לתצוגה מקדימה' }));
+      return dialog;
+    };
+
+    let dialog = await importOnce();
+    expect(await within(dialog).findByText('2 ייובאו')).toBeTruthy();
+    expect(within(dialog).getByText('1 שורות לא תקינות')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ייבוא 2 תנועות' }));
+    expect(await within(dialog).findByText('יובאו 2 תנועות')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'סיום' }));
+
+    expect(await screen.findByText('סופר יודה')).toBeTruthy();
+    await waitFor(() => expect(backend.stored).toHaveLength(2), { timeout: 3000 });
+    expect(backend.stored[0]).toMatchObject({ source: 'csv', importHash: expect.any(String) });
+
+    // The same file again: everything is already there.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    dialog = await importOnce();
+    expect(await within(dialog).findByText('0 ייובאו')).toBeTruthy();
+    expect(within(dialog).getByText('2 כבר קיימות')).toBeTruthy();
+  });
+});
