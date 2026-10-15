@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { BackendError, toBackendError } from './errors.js';
 import { clearAuthParams, initialAuthCallback } from './authCallback.js';
+import { fromRow, toRow } from '../../lib/transactions.js';
+
+const TX_PAGE = 500;
+const TX_COLUMNS =
+  'id, kind, amount, budget_key, merchant, note, occurred_at, source, import_hash, client_updated_at, deleted_at, updated_at';
 
 /**
  * Production backend: Supabase Auth for sessions, Postgres (RLS) for per-user journeys and roles.
@@ -160,6 +165,32 @@ export function createSupabaseBackend(url, anonKey) {
           .upsert({ user_id: userId, state, stage, client_updated_at: new Date(updatedAt).toISOString() }, { onConflict: 'user_id' }),
         'שמירת הנתונים בענן נכשלה.',
       );
+    },
+
+    /**
+     * Transactions changed since `since` (server time, ms), tombstones included, oldest change first.
+     * Paged because PostgREST caps a response at 1000 rows.
+     */
+    async listTransactions(userId, { since = 0 } = {}) {
+      const result = [];
+      for (let from = 0; ; from += TX_PAGE) {
+        let query = client.from('transactions').select(TX_COLUMNS).eq('user_id', userId);
+        if (since) query = query.gt('updated_at', new Date(since).toISOString());
+        const rows = unwrap(await query.order('updated_at').order('id').range(from, from + TX_PAGE - 1), 'טעינת התנועות נכשלה.');
+        for (const row of rows ?? []) {
+          const tx = fromRow(row);
+          if (tx) result.push(tx);
+        }
+        if (!rows || rows.length < TX_PAGE) return result;
+      }
+    },
+
+    /** Idempotent upsert on the client-generated id; a delete is a tombstone (deletedAt set). */
+    async upsertTransactions(userId, transactions) {
+      for (let i = 0; i < transactions.length; i += TX_PAGE) {
+        const rows = transactions.slice(i, i + TX_PAGE).map((tx) => toRow(tx, userId));
+        unwrap(await client.from('transactions').upsert(rows, { onConflict: 'id' }), 'שמירת התנועות בענן נכשלה.');
+      }
     },
 
     admin: {

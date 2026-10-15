@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import AppShell from '../src/app/AppShell.jsx';
 import { AuthProvider } from '../src/state/AuthContext.jsx';
 import { JourneyProvider } from '../src/state/JourneyContext.jsx';
+import { TransactionsProvider } from '../src/state/TransactionsContext.jsx';
 import { dashboardJourney } from './fixtures.js';
 
 const USER = { id: 'user-1', email: 'user@example.com', role: 'user', suspended: false, emailConfirmed: true };
@@ -26,7 +27,9 @@ function renderApp() {
     <AuthProvider backendLoader={async () => backend}>
       {/* No cloud backend: exercises local persistence only. */}
       <JourneyProvider userId={USER.id} backend={null}>
-        <AppShell />
+        <TransactionsProvider userId={USER.id} backend={null}>
+          <AppShell />
+        </TransactionsProvider>
       </JourneyProvider>
     </AuthProvider>,
   );

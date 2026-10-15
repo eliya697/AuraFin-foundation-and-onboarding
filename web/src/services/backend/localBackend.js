@@ -9,6 +9,7 @@ import { ADMIN_EMAIL } from './config.js';
 const USERS_KEY = 'aurafin:dev:users';
 const SESSION_KEY = 'aurafin:dev:session';
 const journeyKey = (id) => `aurafin:dev:journey:${id}`;
+const transactionsKey = (id) => `aurafin:dev:transactions:${id}`;
 const LATENCY_MS = 250;
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -135,6 +136,27 @@ export function createLocalBackend() {
       await wait();
       if (current()?.suspended) throw new BackendError(messageFor('user_banned'), { code: 'user_banned' });
       write(journeyKey(userId), { state, stage, updatedAt });
+    },
+
+    // Same contract as the Supabase backend: `syncedAt` stands in for the server's updated_at, and an
+    // older write never replaces a newer one (the keep_newest_client_write trigger).
+    async listTransactions(userId, { since = 0 } = {}) {
+      await wait();
+      return read(transactionsKey(userId), [])
+        .filter((tx) => tx.syncedAt > since)
+        .sort((a, b) => a.syncedAt - b.syncedAt);
+    },
+
+    async upsertTransactions(userId, transactions) {
+      await wait();
+      if (current()?.suspended) throw new BackendError(messageFor('user_banned'), { code: 'user_banned' });
+      const byId = new Map(read(transactionsKey(userId), []).map((tx) => [tx.id, tx]));
+      const now = Date.now();
+      for (const tx of transactions) {
+        const stored = byId.get(tx.id);
+        if (!stored || tx.updatedAt >= stored.updatedAt) byId.set(tx.id, { ...tx, syncedAt: now });
+      }
+      write(transactionsKey(userId), [...byId.values()]);
     },
 
     admin: {

@@ -8,6 +8,7 @@ import SavingsGoalMetric from './SavingsGoalMetric.jsx';
 import ExpenseDonutChart from './ExpenseDonutChart.jsx';
 import AISavingsPlanView from './AISavingsPlanView.jsx';
 import VerificationBadge from './VerificationBadge.jsx';
+import TransactionsPanel from '../transactions/TransactionsPanel.jsx';
 import { GOALS, LIFE_STAGES } from '../../lib/catalog.js';
 import { formatCurrency } from '../../lib/budget.js';
 import { useJourney } from '../../state/JourneyContext.jsx';
@@ -82,6 +83,12 @@ export default function Dashboard() {
         </ErrorBoundary>
         <ErrorBoundary label="Expense chart" fallback={sectionFallback} resetKeys={[analysis]}>
           <ExpenseDonutChart breakdown={analysis.breakdown} customItems={view.budget.custom} />
+        </ErrorBoundary>
+      </div>
+
+      <div className="mb-5">
+        <ErrorBoundary label="Transactions" fallback={sectionFallback}>
+          <TransactionsPanel budget={view.budget} profile={view.profile} />
         </ErrorBoundary>
       </div>
 
