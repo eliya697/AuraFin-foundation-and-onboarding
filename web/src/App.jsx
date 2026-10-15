@@ -19,10 +19,28 @@ import { warmUp } from './services/api.js';
  * gets their own JourneyProvider (keyed by id) so data never leaks between accounts on one device.
  */
 function Guarded() {
-  const { status, user, backend, recovery } = useAuth();
+  const { status, user, backend, recovery, configError } = useAuth();
 
   if (status === 'loading') return <Spinner fullScreen />;
-  if (status === 'unconfigured') return <Notice icon={Settings} title="נדרשת הגדרה" body="שירות ההתחברות לא הוגדר בגרסה הזו. מנהל המערכת צריך להגדיר את VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY ולפרסם מחדש." />;
+  if (status === 'unconfigured') {
+    return (
+      <Notice
+        icon={Settings}
+        title="נדרשת הגדרה"
+        body={
+          configError
+            ? 'הגדרות שירות ההתחברות בגרסה הזו שגויות, ולכן אי אפשר להתחבר. מנהל המערכת צריך לתקן אותן ולפרסם מחדש.'
+            : 'שירות ההתחברות לא הוגדר בגרסה הזו. מנהל המערכת צריך להגדיר את VITE_SUPABASE_URL ו-VITE_SUPABASE_ANON_KEY ולפרסם מחדש.'
+        }
+      >
+        {configError && (
+          <p dir="ltr" className="mt-4 break-words rounded-2xl bg-mist p-3 text-start font-mono text-xs text-navy-soft">
+            {configError}
+          </p>
+        )}
+      </Notice>
+    );
+  }
   if (recovery) return <AuthScreen initialMode="recovery" />;
   if (status !== 'signedIn' || !user) return <AuthScreen />;
   if (user.suspended) return <Suspended />;

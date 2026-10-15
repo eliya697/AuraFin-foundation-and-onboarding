@@ -1,4 +1,4 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from './config.js';
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabaseConfigProblem } from './config.js';
 
 /**
  * Resolves the auth/data backend:
@@ -10,10 +10,20 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from './config.js';
  */
 let pending = null;
 
+/** The build was given Supabase settings that cannot work (see supabaseConfigProblem). */
+export class ConfigError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
 export function loadBackend() {
   if (!pending) {
     pending = (async () => {
       if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        const problem = supabaseConfigProblem(SUPABASE_URL, SUPABASE_ANON_KEY);
+        if (problem) throw new ConfigError(problem);
         const { createSupabaseBackend } = await import('./supabaseBackend.js');
         return createSupabaseBackend(SUPABASE_URL, SUPABASE_ANON_KEY);
       }

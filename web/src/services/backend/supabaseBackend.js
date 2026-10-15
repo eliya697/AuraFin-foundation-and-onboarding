@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { BackendError, toBackendError } from './errors.js';
+import { clearAuthParams, initialAuthCallback } from './authCallback.js';
 
 /**
  * Production backend: Supabase Auth for sessions, Postgres (RLS) for per-user journeys and roles.
@@ -7,9 +8,44 @@ import { BackendError, toBackendError } from './errors.js';
  */
 export function createSupabaseBackend(url, anonKey) {
   const client = createClient(url, anonKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    // Implicit flow on purpose: a PKCE link only works in the exact browser that signed up, but
+    // confirmation emails are often opened in a mail app's browser or (iOS) outside the installed PWA.
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
   });
+  // Always the deployed app root (…/AuraFin-foundation-and-onboarding/), never the current deep URL.
   const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+
+  /**
+   * Finishes whatever email link opened the app before any auth state is reported, so the UI never
+   * flashes the login screen while a confirmation is still being processed. Resolves to a result
+   * the auth screen can explain ({ kind: 'confirmed' | 'error', type, code }) or null.
+   */
+  const callback = initialAuthCallback();
+  const callbackResult = (async () => {
+    // getSession() waits for supabase-js to consume #access_token=… (detectSessionInUrl).
+    const { data: initial } = await client.auth.getSession();
+    if (!callback) return null;
+    try {
+      if (callback.kind === 'token_hash') {
+        const { error } = await client.auth.verifyOtp({ token_hash: callback.tokenHash, type: callback.type });
+        return error ? { kind: 'error', code: error.code ?? 'otp_expired', type: callback.type } : { kind: 'confirmed', type: callback.type };
+      }
+      if (callback.kind === 'code') {
+        const { error } = await client.auth.exchangeCodeForSession(callback.code);
+        return error ? { kind: 'error', code: 'link_other_browser', type: callback.type } : { kind: 'confirmed', type: callback.type };
+      }
+      if (callback.kind === 'tokens') {
+        return initial.session ? { kind: 'confirmed', type: callback.type } : { kind: 'error', code: 'otp_expired', type: callback.type };
+      }
+      return callback; // { kind: 'error', code, description }
+    } finally {
+      clearAuthParams();
+    }
+  })().catch((error) => {
+    console.error('[AuraFin] Auth callback failed:', error);
+    clearAuthParams();
+    return { kind: 'error', code: 'unknown' };
+  });
 
   async function withRole(authUser) {
     if (!authUser) return null;
@@ -38,19 +74,47 @@ export function createSupabaseBackend(url, anonKey) {
       return withRole(data.session?.user ?? null);
     },
 
-    /** cb(event, user). Supabase forbids awaiting its own calls inside the listener, so defer. */
+    /**
+     * cb(event, user). Events are delivered in order, only after the email-link callback finished
+     * (see callbackResult), and outside Supabase's own listener (awaiting its calls in there deadlocks).
+     */
     onAuthChange(cb) {
-      const { data } = client.auth.onAuthStateChange((event, session) => {
-        setTimeout(async () => {
-          try {
-            cb(event, await withRole(session?.user ?? null));
-          } catch (error) {
-            console.error('[AuraFin] Auth listener failed:', error);
-            cb(event, null);
-          }
-        }, 0);
+      let active = true;
+      const deliver = async (event, session) => {
+        if (!active) return;
+        const authUser = session?.user ?? null;
+        let user;
+        try {
+          user = await withRole(authUser);
+        } catch (error) {
+          // Never drop a valid session because the role lookup failed.
+          console.error('[AuraFin] Role lookup failed:', error);
+          user = authUser && { id: authUser.id, email: authUser.email ?? '', emailConfirmed: Boolean(authUser.email_confirmed_at), role: null, suspended: null };
+        }
+        if (active) cb(event, user);
+      };
+      // Replay the session as it stands once the link is processed: a confirmation that finished
+      // before this subscription existed must still sign the user in.
+      let chain = callbackResult.then(async () => {
+        const { data } = await client.auth.getSession();
+        await deliver('INITIAL_SESSION', data.session);
       });
-      return () => data.subscription.unsubscribe();
+      const { data } = client.auth.onAuthStateChange((event, session) => {
+        chain = chain.then(() => deliver(event, session));
+      });
+      return () => {
+        active = false;
+        data.subscription.unsubscribe();
+      };
+    },
+
+    /** Outcome of the email link that opened the app (once), for the auth screen to explain. */
+    callbackResult() {
+      return callbackResult;
+    },
+
+    async resendConfirmation(email) {
+      unwrap(await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectTo } }));
     },
 
     async signIn(email, password) {

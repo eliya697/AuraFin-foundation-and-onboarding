@@ -15,6 +15,8 @@ export function AuthProvider({ children, backendLoader = loadBackend }) {
   const [status, setStatus] = useState('loading');
   const [user, setUser] = useState(null);
   const [recovery, setRecovery] = useState(false);
+  const [configError, setConfigError] = useState(null);
+  const [callbackNotice, setCallbackNotice] = useState(null); // outcome of the email link that opened the app
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +30,9 @@ export function AuthProvider({ children, backendLoader = loadBackend }) {
         }
         setBackend(instance);
         setAccessTokenProvider(() => instance.getAccessToken());
+        instance.callbackResult?.().then((result) => {
+          if (!cancelled && result?.kind === 'error') setCallbackNotice(result);
+        });
         unsubscribe = instance.onAuthChange((event, nextUser) => {
           if (cancelled) return;
           if (event === 'PASSWORD_RECOVERY') setRecovery(true);
@@ -37,7 +42,9 @@ export function AuthProvider({ children, backendLoader = loadBackend }) {
       })
       .catch((error) => {
         console.error('[AuraFin] Auth backend failed to load:', error);
-        if (!cancelled) setStatus('unconfigured');
+        if (cancelled) return;
+        if (error?.name === 'ConfigError') setConfigError(error.message);
+        setStatus('unconfigured');
       });
     return () => {
       cancelled = true;
@@ -69,6 +76,10 @@ export function AuthProvider({ children, backendLoader = loadBackend }) {
       status,
       user,
       recovery,
+      configError,
+      callbackNotice,
+      dismissCallbackNotice: () => setCallbackNotice(null),
+      resendConfirmation: (email) => backend.resendConfirmation(email.trim()),
       isAdmin: user?.role === 'admin' && !user?.suspended,
       signIn: (email, password) => backend.signIn(email.trim(), password),
       signUp: (email, password) => backend.signUp(email.trim(), password),
@@ -80,7 +91,7 @@ export function AuthProvider({ children, backendLoader = loadBackend }) {
       signOut: () => backend.signOut(),
       refreshUser,
     }),
-    [backend, status, user, recovery, refreshUser],
+    [backend, status, user, recovery, configError, callbackNotice, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

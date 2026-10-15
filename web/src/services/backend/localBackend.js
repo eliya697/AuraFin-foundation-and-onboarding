@@ -95,6 +95,14 @@ export function createLocalBackend() {
       return { needsConfirmation: false };
     },
 
+    callbackResult() {
+      return Promise.resolve(null);
+    },
+
+    async resendConfirmation() {
+      await wait();
+    },
+
     async requestPasswordReset() {
       await wait();
       // Nothing is emailed in dev mode; the UI still shows the "check your inbox" state.

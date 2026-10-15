@@ -34,7 +34,7 @@ function validate(mode, { email, password, confirm }) {
 
 /** Login / sign-up / forgot-password / set-new-password. Hebrew, RTL, mobile-first. */
 export default function AuthScreen({ initialMode = 'signin' }) {
-  const { backend, signIn, signUp, requestPasswordReset, updatePassword } = useAuth();
+  const { backend, signIn, signUp, requestPasswordReset, updatePassword, resendConfirmation, callbackNotice, dismissCallbackNotice } = useAuth();
   const [mode, setMode] = useState(initialMode);
   const [fields, setFields] = useState({ email: '', password: '', confirm: '' });
   const [errors, setErrors] = useState({});
@@ -42,13 +42,36 @@ export default function AuthScreen({ initialMode = 'signin' }) {
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false); // sign-in said "email not confirmed"
+  const [resend, setResend] = useState('idle'); // 'idle' | 'sending' | 'sent'
   const copy = COPY[mode];
+  const linkProblem = callbackNotice?.kind === 'error' ? callbackNotice : null;
+
+  const sendConfirmation = async () => {
+    const email = (notice?.email ?? fields.email).trim();
+    if (!EMAIL_RE.test(email)) {
+      setErrors((prev) => ({ ...prev, email: 'הזינו את האימייל שאיתו נרשמתם.' }));
+      document.getElementById('auth-email')?.focus();
+      return;
+    }
+    setResend('sending');
+    setFormError(null);
+    try {
+      await resendConfirmation(email);
+      setResend('sent');
+    } catch (error) {
+      setResend('idle');
+      setFormError(error?.message ?? 'שליחת המייל נכשלה. נסו שוב.');
+    }
+  };
 
   const switchMode = (next) => {
     setMode(next);
     setErrors({});
     setFormError(null);
     setNotice(null);
+    setUnconfirmed(false);
+    setResend('idle');
     setFields((prev) => ({ ...prev, password: '', confirm: '' }));
   };
 
@@ -77,7 +100,14 @@ export default function AuthScreen({ initialMode = 'signin' }) {
         await signIn(fields.email, fields.password);
       } else if (mode === 'signup') {
         const { needsConfirmation } = await signUp(fields.email, fields.password);
-        if (needsConfirmation) setNotice({ title: 'כמעט סיימנו!', body: `שלחנו קישור אימות ל-${fields.email.trim()}. אשרו אותו ואז התחברו.` });
+        if (needsConfirmation) {
+          setNotice({
+            title: 'כמעט סיימנו!',
+            body: `שלחנו קישור אימות ל-${fields.email.trim()}. לחצו עליו כדי להיכנס. אם הקישור נפתח בדפדפן אחר או מחוץ לאפליקציה המותקנת — חזרו לכאן והתחברו עם האימייל והסיסמה.`,
+            email: fields.email.trim(),
+            canResend: true,
+          });
+        }
       } else if (mode === 'forgot') {
         await requestPasswordReset(fields.email);
         setNotice({ title: 'בדקו את תיבת הדואר', body: 'אם קיים חשבון עם האימייל הזה, נשלח אליו קישור לאיפוס הסיסמה.' });
@@ -86,6 +116,7 @@ export default function AuthScreen({ initialMode = 'signin' }) {
       }
     } catch (error) {
       setFormError(error?.message ?? 'משהו השתבש. נסו שוב.');
+      setUnconfirmed(mode === 'signin' && error?.code === 'email_not_confirmed');
     } finally {
       setBusy(false);
     }
@@ -109,7 +140,13 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                   </span>
                   <h1 className="mt-4 text-2xl font-extrabold text-navy">{notice.title}</h1>
                   <p className="mt-2 leading-relaxed text-navy-soft">{notice.body}</p>
-                  <Button variant="secondary" className="mt-6 w-full" onClick={() => switchMode('signin')}>
+                  {notice.canResend && <ResendButton state={resend} onClick={sendConfirmation} className="mt-5 w-full" />}
+                  {formError && (
+                    <p role="alert" className="mt-3 text-sm font-medium text-danger">
+                      {formError}
+                    </p>
+                  )}
+                  <Button variant="secondary" className="mt-3 w-full" onClick={() => switchMode('signin')}>
                     חזרה להתחברות
                   </Button>
                 </div>
@@ -124,6 +161,20 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                       <p className="text-sm text-navy-soft">{copy.subtitle}</p>
                     </div>
                   </div>
+
+                  {linkProblem && mode === 'signin' && (
+                    <div role="alert" className="mt-5 rounded-2xl border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900">
+                      <p className="font-bold">{linkProblem.code === 'link_other_browser' ? 'הקישור נפתח בדפדפן אחר' : 'קישור האימות כבר נוצל או פג תוקף'}</p>
+                      <p className="mt-1 leading-relaxed">
+                        {linkProblem.code === 'link_other_browser'
+                          ? 'פתחו את הקישור באותו מכשיר ודפדפן שבו נרשמתם — או פשוט התחברו כאן.'
+                          : 'לפעמים תוכנת המייל פותחת את הקישור לפניכם, ואז החשבון כבר מאומת: נסו פשוט להתחבר. אם תתבקשו לאמת שוב — הזינו את האימייל ושלחו קישור חדש.'}
+                      </p>
+                      <button type="button" onClick={dismissCallbackNotice} className="mt-1 inline-flex min-h-12 items-center font-bold underline-offset-4 hover:underline">
+                        הבנתי
+                      </button>
+                    </div>
+                  )}
 
                   <div className="mt-6 space-y-4">
                     {mode !== 'recovery' && (
@@ -185,6 +236,10 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                     </button>
                   )}
 
+                  {(unconfirmed || (linkProblem && mode === 'signin')) && (
+                    <ResendButton state={resend} onClick={sendConfirmation} className="mt-3 w-full" />
+                  )}
+
                   {formError && (
                     <p role="alert" className="mt-4 flex items-start gap-2 rounded-2xl border border-danger/25 bg-danger/[0.05] p-3 text-sm font-medium text-danger">
                       <AlertCircle size={16} className="mt-0.5 shrink-0" />
@@ -224,6 +279,15 @@ export default function AuthScreen({ initialMode = 'signin' }) {
         )}
       </div>
     </div>
+  );
+}
+
+function ResendButton({ state, onClick, className = '' }) {
+  return (
+    <Button variant="secondary" onClick={onClick} disabled={state !== 'idle'} className={className}>
+      {state === 'sending' ? <Loader2 size={18} className="animate-spin" /> : <MailCheck size={18} />}
+      {state === 'sent' ? 'נשלח! בדקו את תיבת הדואר' : 'שליחת קישור אימות חדש'}
+    </Button>
   );
 }
 

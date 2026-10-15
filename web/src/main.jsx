@@ -1,3 +1,5 @@
+// First: capture any email-link auth parameters before anything else can touch the URL.
+import './services/backend/authCallback.js';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MotionConfig } from 'framer-motion';
