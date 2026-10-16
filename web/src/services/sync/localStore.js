@@ -1,5 +1,6 @@
 /**
- * Device storage for local-first data: each user's rows per entity ('transactions', 'goals'), the
+ * Device storage for local-first data: each user's rows per entity ('transactions', 'goals',
+ * 'daily_logs'), the
  * outbox of mutations not yet accepted by the cloud, and small sync metadata (last pull time).
  *
  * Production uses IndexedDB (the `aurafin` database). Where IndexedDB is unavailable (some private
@@ -11,8 +12,9 @@
  */
 
 const DB_NAME = 'aurafin';
-const DB_VERSION = 1;
-export const ENTITIES = ['transactions', 'goals'];
+// v2 adds the daily_logs store (check-ins); onupgradeneeded only creates the stores that are missing.
+const DB_VERSION = 2;
+export const ENTITIES = ['transactions', 'goals', 'daily_logs'];
 const STORES = [...ENTITIES, 'outbox', 'meta'];
 
 const keyOf = (userId, id) => `${userId}|${id}`;

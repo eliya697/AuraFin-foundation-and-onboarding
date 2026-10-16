@@ -1,10 +1,15 @@
 import { INCOME_KEY, OTHER_KEY, TX_LIMITS, isValidDate } from './transactions.js';
+import { lineByKeyword } from './categorize.js';
+import { sha256Hex, uuidFromHex } from './ids.js';
 
 /**
  * Bank / credit-card CSV import, as pure functions (see tests/csvImport.test.js):
  *
  *   decodeBytes → parseCsv → findHeaderRow → guessMapping → buildPreview → markDuplicates
- *   → suggestBudgetKeys → toTransactions (async: ids and fingerprints are SHA-256 based)
+ *   → suggestBudgetKeys → (reviseItem for rows the user fixes) → toTransactions
+ *   (ids and fingerprints are SHA-256 based, so the fingerprint steps are async)
+ *
+ * PDF statements (lib/pdfStatement.js) are turned into rows and join this pipeline at guessMapping.
  *
  * Israeli exports come as UTF-8 (often with a BOM) or windows-1255, use `,` `;` or tab, put a few
  * title lines above the header, write dates as dd/mm/yyyy and amounts as "1,234.50" or "-1,234.50".
@@ -237,6 +242,14 @@ export function parseDate(raw) {
 const SUMMARY_RE = /סה"?כ|סה״כ|total|יתרה/i;
 export const normalizeMerchant = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 
+function rowError(occurredOn, rawDate, signed) {
+  if (!occurredOn) return rawDate ? `תאריך לא מזוהה: ${rawDate}` : 'חסר תאריך';
+  if (signed === null || signed === undefined || Number.isNaN(signed)) return 'סכום לא מזוהה';
+  if (signed === 0) return 'סכום 0';
+  if (Math.abs(signed) > TX_LIMITS.maxAmount) return 'סכום גבוה מדי';
+  return null;
+}
+
 /**
  * Data rows → preview items: { line, occurredOn, amount, kind, merchant, note, error }.
  * `positiveIs` (signed mode): what a positive number means — 'expense' (credit-card charges) or
@@ -266,11 +279,7 @@ export function buildPreview(rows, headerIndex, mapping, { positiveIs = 'expense
 
     const occurredOn = parseDate(rawDate);
     const base = { line: i + 1, occurredOn, merchant, note: cell(row, mapping.note).slice(0, TX_LIMITS.note) };
-    let error = null;
-    if (!occurredOn) error = rawDate ? `תאריך לא מזוהה: ${rawDate}` : 'חסר תאריך';
-    else if (signed === null) error = 'סכום לא מזוהה';
-    else if (signed === 0) error = 'סכום 0';
-    else if (Math.abs(signed) > TX_LIMITS.maxAmount) error = 'סכום גבוה מדי';
+    const error = rowError(occurredOn, rawDate, signed);
     if (!occurredOn && signed === null && !merchant) continue; // a footer / blank-ish line
 
     items.push({
@@ -311,17 +320,6 @@ export function fingerprintKeys(items) {
     seen.set(base, occurrence + 1);
     return `${base}|${occurrence}`;
   });
-}
-
-async function sha256Hex(text) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-/** A stable UUID-shaped id from a hex digest (version nibble 8 = custom, RFC 9562). */
-function uuidFromHex(hex) {
-  const variant = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
 /**
@@ -379,8 +377,9 @@ function lineByName(merchant, lines) {
 
 /**
  * Budget line per item: the line the user last chose for the same merchant (learned from their
- * transactions), else a line whose name appears in the merchant ("חברת החשמל" → חשמל), else "other".
- * Income always maps to the income key.
+ * transactions), else a line whose name appears in the merchant ("חברת החשמל" → חשמל), else a
+ * keyword category ("שופרסל" → קניות, "פז" → a custom "רכב" line; lib/categorize.js), else "other".
+ * Income always maps to the income key. `autoCategorized` marks keys that came from a guess.
  */
 export function suggestBudgetKeys(items, existingTransactions, lines) {
   const valid = new Set(lines.map((line) => line.key));
@@ -391,17 +390,40 @@ export function suggestBudgetKeys(items, existingTransactions, lines) {
     if (!key || learned.has(key) || tx.kind !== 'expense' || tx.budgetKey === OTHER_KEY || !valid.has(tx.budgetKey)) continue;
     learned.set(key, tx.budgetKey);
   }
-  return items.map((item) => ({
-    ...item,
-    budgetKey:
-      item.kind === 'income'
-        ? INCOME_KEY
-        : learned.get(normalizeMerchant(item.merchant)) ?? lineByName(item.merchant, lines) ?? OTHER_KEY,
-  }));
+  return items.map((item) => {
+    if (item.kind === 'income') return { ...item, budgetKey: INCOME_KEY, autoCategorized: false };
+    const known = learned.get(normalizeMerchant(item.merchant));
+    const guessed = known ?? lineByName(item.merchant, lines) ?? lineByKeyword(item.merchant, lines);
+    return { ...item, budgetKey: guessed ?? OTHER_KEY, autoCategorized: Boolean(!known && guessed) };
+  });
+}
+
+/**
+ * A preview row after the user edits it: { occurredOn, amount, kind, merchant } are re-validated the
+ * same way as parsed rows. A row that was valid keeps its fingerprint (it describes the file's line,
+ * so re-importing the file still finds it); a row that only now became valid gets one from its
+ * corrected content plus its line number (async). Duplicate flags are recomputed by the caller.
+ */
+export async function reviseItem(item, patch, userId) {
+  const next = { ...item, ...patch };
+  next.merchant = String(next.merchant ?? '').slice(0, TX_LIMITS.merchant);
+  const amount = next.amount === '' || next.amount === null ? null : Number(next.amount);
+  next.amount = Number.isFinite(amount) ? Math.round(Math.abs(amount) * 100) / 100 : null;
+  if (!isValidDate(next.occurredOn)) next.occurredOn = null;
+  next.error = rowError(next.occurredOn, patch.occurredOn ?? '', next.amount);
+  if (next.kind === 'income') next.budgetKey = INCOME_KEY;
+  else if (next.budgetKey === INCOME_KEY) next.budgetKey = OTHER_KEY;
+  if (next.error) return { ...next, selected: false };
+  if (!item.importHash) {
+    const key = `revised|${item.line}|${next.occurredOn}|${next.kind}|${next.amount.toFixed(2)}|${normalizeMerchant(next.merchant)}`;
+    next.importHash = await sha256Hex(`aurafin-import-v1|${key}`);
+    next.id = uuidFromHex(await sha256Hex(`${userId}|${next.importHash}`));
+  }
+  return { ...next, edited: true, selected: item.error ? true : next.selected };
 }
 
 /** Selected, valid, non-duplicate items → transactions ready for the outbox. */
-export function toTransactions(items, { now = Date.now() } = {}) {
+export function toTransactions(items, { now = Date.now(), source = 'csv' } = {}) {
   return items
     .filter((item) => item.selected && !item.error && !item.duplicate && item.id)
     .map((item) => ({
@@ -412,7 +434,7 @@ export function toTransactions(items, { now = Date.now() } = {}) {
       merchant: item.merchant,
       note: item.note ?? '',
       occurredOn: item.occurredOn,
-      source: 'csv',
+      source,
       importHash: item.importHash,
       updatedAt: now,
       deletedAt: null,

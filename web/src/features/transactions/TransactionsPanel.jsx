@@ -1,21 +1,32 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, FileUp, Loader2, Plus } from 'lucide-react';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import TransactionDialog from './TransactionDialog.jsx';
-import CsvImportDialog from './CsvImportDialog.jsx';
 import { budgetLines, formatTxAmount, formatTxDate, lineLabel, resolveLineKey } from '../../lib/transactions.js';
 import { useTransactions } from '../../state/TransactionsContext.jsx';
 
+// The import flow (and the PDF reader it pulls in) downloads only when first opened.
+const StatementImportDialog = lazy(() => import('./StatementImportDialog.jsx'));
+
 const PAGE = 8;
 
-/** Latest transactions with quick add / edit / delete. */
-export default function TransactionsPanel({ budget, profile }) {
+/**
+ * Latest transactions with quick add / edit / delete and statement import.
+ * `onApplyBudget(budget)` (optional) lets the import adopt a budget suggested from real spending.
+ */
+export default function TransactionsPanel({ budget, profile, onApplyBudget }) {
   const { transactions, loading, save, remove } = useTransactions();
   const lines = useMemo(() => budgetLines(budget, profile), [budget, profile]);
   const [limit, setLimit] = useState(PAGE);
   const [dialog, setDialog] = useState({ open: false, transaction: null });
   const [importing, setImporting] = useState(false);
+  // Stays mounted after the first open so the sheet can animate out.
+  const [importLoaded, setImportLoaded] = useState(false);
+  const openImport = useCallback(() => {
+    setImportLoaded(true);
+    setImporting(true);
+  }, []);
 
   const openNew = useCallback(() => setDialog({ open: true, transaction: null }), []);
   const openEdit = useCallback((transaction) => setDialog({ open: true, transaction }), []);
@@ -31,7 +42,7 @@ export default function TransactionsPanel({ budget, profile }) {
           <p className="text-sm text-navy-soft">מה באמת יצא ונכנס, מול התקציב שתכננתם.</p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setImporting(true)} aria-label="ייבוא מקובץ CSV">
+          <Button variant="secondary" size="sm" onClick={openImport} aria-label="ייבוא דף חשבון (CSV או PDF)">
             <FileUp size={16} /> <span className="hidden min-[400px]:inline">ייבוא</span>
           </Button>
           <Button size="sm" onClick={openNew}>
@@ -63,7 +74,18 @@ export default function TransactionsPanel({ budget, profile }) {
         </>
       )}
 
-      <CsvImportDialog open={importing} lines={lines} onClose={() => setImporting(false)} />
+      {importLoaded && (
+        <Suspense fallback={null}>
+          <StatementImportDialog
+            open={importing}
+            lines={lines}
+            budget={budget}
+            profile={profile}
+            onApplyBudget={onApplyBudget}
+            onClose={() => setImporting(false)}
+          />
+        </Suspense>
+      )}
       <TransactionDialog open={dialog.open} transaction={dialog.transaction} lines={lines} onSave={save} onDelete={remove} onClose={close} />
     </Card>
   );

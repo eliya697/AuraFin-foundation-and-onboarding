@@ -3,6 +3,7 @@ import { CloudAlert, CloudCheck, CloudOff, Loader2 } from 'lucide-react';
 import { useSyncStatus } from '../state/JourneyContext.jsx';
 import { useTransactionsSync } from '../state/TransactionsContext.jsx';
 import { useGoalsSync } from '../state/GoalsContext.jsx';
+import { useHabitsSync } from '../state/HabitsContext.jsx';
 
 const LOOKS = {
   loading: { icon: Loader2, text: 'מסנכרן…', spin: true, className: 'text-navy-soft' },
@@ -39,15 +40,17 @@ function SyncBadge({ compact = false }) {
   const journey = useSyncStatus();
   const tx = useTransactionsSync();
   const goals = useGoalsSync();
-  const sources = [journey, tx, goals];
+  const habits = useHabitsSync();
+  const sources = [journey, tx, goals, habits];
   const cloud = sources.some((s) => s.cloud);
   const status = combineSyncStatus(...sources.map((s) => (s.cloud ? s.status : 'local')));
-  const pending = (tx.cloud ? tx.pending : 0) + (goals.cloud ? goals.pending : 0);
+  const pending = [tx, goals, habits].reduce((sum, s) => sum + (s.cloud ? s.pending : 0), 0);
   const retry = useCallback(() => {
     journey.retry();
     tx.retry();
     goals.retry();
-  }, [journey, tx, goals]);
+    habits.retry();
+  }, [journey, tx, goals, habits]);
   const busy = status === 'pending' || status === 'saving';
   const [shown, setShown] = useState(busy ? 'synced' : status);
 

@@ -1,6 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import Markdown from 'react-markdown';
 import { Ban, Bot, Check, CircleDot, Droplets, RefreshCw, Sparkles } from 'lucide-react';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -12,6 +11,9 @@ import { OfflineError, fetchSavingsPlan, hasBackend } from '../../services/api.j
 import { fingerprintOf, useJourney } from '../../state/JourneyContext.jsx';
 import { useLastDefined } from '../../hooks/useLastDefined.js';
 import { useMaskText, useMoney } from '../../state/privacy.js';
+
+// The Markdown parser only ships once a plan is actually shown.
+const Markdown = lazy(() => import('react-markdown'));
 
 const LOADING_STEPS = ['מנתחים את ההכנסות וההוצאות…', 'מזהים דליפות לפי המסלול שלכם…', 'בונים רשימת "לא לקנות" לחודש…', 'מנסחים את התוכנית…'];
 
@@ -169,7 +171,12 @@ const DoNotBuyList = memo(function DoNotBuyList({ items }) {
 
 const PlanMarkdown = memo(function PlanMarkdown({ markdown }) {
   const mask = useMaskText();
-  return <Markdown components={markdownComponents}>{mask(markdown)}</Markdown>;
+  const text = mask(markdown);
+  return (
+    <Suspense fallback={<p className="whitespace-pre-line leading-relaxed text-navy-soft">{text}</p>}>
+      <Markdown components={markdownComponents}>{text}</Markdown>
+    </Suspense>
+  );
 });
 
 export default function AISavingsPlanView() {

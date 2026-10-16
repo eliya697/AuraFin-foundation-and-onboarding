@@ -112,7 +112,55 @@ New sections under the existing dashboard. The existing cards stay unchanged.
    two offline devices converges on the same rows (upsert on id) instead of hitting the
    `(user_id, import_hash)` unique index. Rows matching a hand-typed transaction (same date,
    direction, amount) are flagged "possibly entered manually" and start unselected.
-   Code: `web/src/lib/csvImport.js`, `web/src/features/transactions/CsvImportDialog.jsx`.
+   Code: `web/src/lib/csvImport.js`, `web/src/lib/pdfStatement.js`, `web/src/lib/categorize.js`, `web/src/lib/budgetSuggestion.js`, `web/src/features/transactions/StatementImportDialog.jsx`, `web/src/features/transactions/BankStatementUploader.jsx`.
+
+## PDF statements, auto-categorization and the smart budget (as built)
+
+Migration `supabase/migrations/0005_statements_daily_logs.sql` (run after 0004) allows `source = 'pdf'`.
+
+1. **Drop zone.** `BankStatementUploader.jsx` takes a `.csv` or `.pdf` by drag-and-drop or tap; the
+   whole import dialog (`StatementImportDialog.jsx`) is a lazy chunk, and pdf.js (+ its worker) is a
+   further chunk fetched only when a PDF is opened. Files are read on the device only.
+2. **PDF → rows** (`lib/pdfStatement.js`). pdf.js text items are regrouped into visual lines and cells
+   (Hebrew pages are read right to left). Every line with a date and at least one amount with agorot
+   (`1,234.50`, `-42.00`, `42.00-`, `(42.00)`) becomes a row `[date, description, amount, amount2,
+   amount3]`; reference numbers (5+ digits) and total lines are dropped. The rows get a synthetic
+   header, so the CSV mapping / preview / dedupe / outbox steps above run unchanged. Scanned PDFs
+   (no text layer) and password-protected PDFs get a Hebrew explanation.
+3. **Auto-categorization** (`lib/categorize.js`). After the learned merchant → line and the line-name
+   match, keyword rules map merchants to the standard lines: housing → rent, bills → electricity /
+   water / municipal, groceries → shopping, restaurants & delivery → dining, streaming / cinema →
+   entertainment, kids → children. Categories without a built-in line (transport, telecom) land on a
+   custom expense whose name fits (e.g. "רכב") or stay "other". Guessed rows are counted
+   ("N סווגו אוטומטית") and stay editable.
+4. **Editable preview.** Each row can be fixed inline (date, description, amount, direction).
+   A valid row keeps the fingerprint of its file line (re-importing still dedupes); a row that was
+   broken gets a fingerprint from its corrected content + line number.
+5. **Smart budget** (`lib/budgetSuggestion.js`). After an import, the average monthly spending per
+   line over the covered months (a running month is left out unless it is the only one) is compared
+   with the plan; lines ≥ ₪20 and 5% away, and the income average, are offered with checkboxes.
+   "עדכון התקציב" opens the budget gate pre-filled (edit_start + budget_changed), so the user reviews
+   the numbers and the plan is re-verified; cancel restores the old budget.
+
+## Daily check-in, no-spend streaks and the daily allowance (as built)
+
+`lib/habits.js` (pure) + `state/HabitsContext.jsx` + `features/habits/DailyCheckInWidget.jsx`.
+
+- **Table** `public.daily_logs` (migration 0005): one row per user per day — `log_date`,
+  `no_spend` (null = not answered), `tasks` jsonb (`review`, `allowance`, `cash`), the same sync
+  columns and RLS (own rows; writes blocked while suspended) as `savings_goals`. The id is derived
+  from user + date, so two devices checking in on one day write the same row. Synced through the
+  outbox as entity `daily_logs` (IndexedDB v2 adds the store).
+- **Streak**: consecutive answered no-spend days; an unanswered today keeps yesterday's streak alive,
+  a "spent" answer or any expense transaction on that day breaks it. Best streak drives the badges
+  (1 / 3 / 7 / 14 / 30 days).
+- **XP** (derived, never stored): +5 for answering, +25 for a no-spend day, +10 per micro-task, +15
+  for all three; a level every 200 XP. "Log a cash expense" is ticked automatically by a manual
+  transaction dated today.
+- **Daily allowance**: flexible money = income − committed lines (rent, bills, children, custom
+  items, the unexpected reserve) − the monthly savings goal. Today's allowance = (flexible − this
+  month's flexible spending before today − committed-line overruns) ÷ days left including today.
+  Status `ok` / `tight` (< 60% of the daily average) / `over` / `empty`, shown as feedback badges.
 
 ## Analytics (as built)
 

@@ -5,6 +5,7 @@ import { AuthProvider } from '../src/state/AuthContext.jsx';
 import { JourneyProvider } from '../src/state/JourneyContext.jsx';
 import { TransactionsProvider } from '../src/state/TransactionsContext.jsx';
 import { GoalsProvider } from '../src/state/GoalsContext.jsx';
+import { HabitsProvider } from '../src/state/HabitsContext.jsx';
 import { dashboardJourney } from './fixtures.js';
 
 const USER = { id: 'user-1', email: 'user@example.com', role: 'user', suspended: false, emailConfirmed: true };
@@ -30,7 +31,9 @@ function renderApp() {
       <JourneyProvider userId={USER.id} backend={null}>
         <TransactionsProvider userId={USER.id} backend={null}>
           <GoalsProvider userId={USER.id} backend={null}>
-            <AppShell />
+            <HabitsProvider userId={USER.id} backend={null}>
+              <AppShell />
+            </HabitsProvider>
           </GoalsProvider>
         </TransactionsProvider>
       </JourneyProvider>

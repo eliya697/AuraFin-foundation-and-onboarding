@@ -20,8 +20,9 @@ overwrite newer data. The top bar shows the sync state (נשמר / שומר… /
 
 **Setup (once):**
 
-1. Create a Supabase project. In the SQL editor run `supabase/migrations/0001_aurafin_init.sql` and
-   `0002_auth_roles_journeys.sql` (or `supabase db push`).
+1. Create a Supabase project. In the SQL editor run the files in `supabase/migrations/` in order —
+   `0001_aurafin_init.sql`, `0002_auth_roles_journeys.sql`, `0004_transactions_goals.sql`,
+   `0005_statements_daily_logs.sql` (PDF imports, daily check-ins) — or use `supabase db push`.
 2. Auth → URL configuration: add `https://eliya697.github.io/AuraFin-foundation-and-onboarding/` (and
    `http://localhost:5173/` for dev) to the redirect URLs, so confirmation and password-reset links work.
 3. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see `web/.env.example`). Set the same

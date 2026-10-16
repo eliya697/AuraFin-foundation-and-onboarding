@@ -12,7 +12,7 @@ const KINDS = [
 ];
 
 const fieldClass =
-  'w-full rounded-2xl border-2 border-navy/10 bg-white px-4 py-3.5 text-lg font-semibold text-navy outline-none transition-colors focus:border-turquoise focus:ring-4 focus:ring-turquoise/15';
+  'w-full rounded-2xl border-2 border-navy/10 bg-surface px-4 py-3.5 text-lg font-semibold text-navy outline-none transition-colors focus:border-turquoise focus:ring-4 focus:ring-turquoise/15';
 
 /** Add / edit sheet for one transaction. `transaction` null = new. */
 export default function TransactionDialog({ open, transaction, lines, onSave, onDelete, onClose }) {
@@ -99,7 +99,7 @@ export default function TransactionDialog({ open, transaction, lines, onSave, on
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="-mx-1 mt-4 max-h-[60dvh] space-y-4 overflow-y-auto px-1 pb-1">
+      <form id={formId} onSubmit={submit} noValidate className="-mx-1 mt-4 max-h-[60dvh] space-y-4 overflow-y-auto overscroll-contain px-1 pb-1">
         <div role="radiogroup" aria-label="סוג התנועה" className="grid grid-cols-2 gap-1 rounded-2xl bg-mist p-1">
           {KINDS.map((kind) => (
             <button
@@ -109,7 +109,7 @@ export default function TransactionDialog({ open, transaction, lines, onSave, on
               aria-checked={draft.kind === kind.id}
               onClick={() => change(kind.id, 'kind')}
               className={`min-h-11 rounded-xl text-sm font-bold transition-colors ${
-                draft.kind === kind.id ? 'bg-white text-navy shadow-sm' : 'text-navy-soft'
+                draft.kind === kind.id ? 'bg-surface text-navy shadow-sm' : 'text-navy-soft'
               }`}
             >
               {kind.label}

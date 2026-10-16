@@ -76,6 +76,8 @@
     /* Keeps sticky headers from covering focused inputs and anchor targets. */
     scroll-padding-top: calc(var(--topbar-h) + 1rem);
     scroll-padding-bottom: calc(var(--app-bottom-inset) + env(safe-area-inset-bottom) + 1rem);
+    /* Locking scroll for a dialog hides the scrollbar; reserving its gutter stops the page jumping sideways. */
+    scrollbar-gutter: stable;
   }
 
   :root[data-theme='dark'] {
@@ -115,6 +117,21 @@
   html.scroll-locked,
   html.scroll-locked body {
     overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Native feel: no long-press callout or text selection on tappable chrome; images don't drag. */
+  button,
+  [role='button'],
+  nav {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  img,
+  svg {
+    -webkit-user-drag: none;
   }
 }
 
@@ -142,6 +159,12 @@
   .cv-auto {
     content-visibility: auto;
     contain-intrinsic-size: auto 900px;
+  }
+
+  /* Dashboard sections below the fold (no fixed-position children: dialogs portal to <body>). */
+  .cv-section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 480px;
   }
 
   .cv-row {

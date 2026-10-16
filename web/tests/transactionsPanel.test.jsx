@@ -130,10 +130,10 @@ describe('CSV import', () => {
     await screen.findByText(/עוד אין תנועות/);
 
     const importOnce = async () => {
-      fireEvent.click(screen.getByRole('button', { name: /ייבוא מקובץ CSV/ }));
+      fireEvent.click(screen.getByRole('button', { name: /ייבוא דף חשבון/ }));
       const dialog = await screen.findByRole('dialog');
       const file = new File([CSV], 'max.csv', { type: 'text/csv' });
-      fireEvent.change(within(dialog).getByLabelText('קובץ CSV'), { target: { files: [file] } });
+      fireEvent.change(within(dialog).getByLabelText('קובץ דף חשבון'), { target: { files: [file] } });
       fireEvent.click(await within(dialog).findByRole('button', { name: 'המשך לתצוגה מקדימה' }));
       return dialog;
     };
@@ -154,5 +154,35 @@ describe('CSV import', () => {
     dialog = await importOnce();
     expect(await within(dialog).findByText('0 ייובאו')).toBeTruthy();
     expect(within(dialog).getByText('2 כבר קיימות')).toBeTruthy();
+  });
+
+  it('auto-categorizes rows and hands a budget built from the import to the gate', async () => {
+    const backend = fakeBackend();
+    const onApplyBudget = vi.fn();
+    render(
+      <TransactionsProvider userId="u1" backend={backend} store={createMemoryStore()}>
+        <TransactionsPanel budget={budget} profile={profile} onApplyBudget={onApplyBudget} />
+      </TransactionsProvider>,
+    );
+    await screen.findByText(/עוד אין תנועות/);
+    fireEvent.click(screen.getByRole('button', { name: /ייבוא דף חשבון/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('קובץ דף חשבון'), { target: { files: [new File([CSV], 'max.csv', { type: 'text/csv' })] } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'המשך לתצוגה מקדימה' }));
+
+    expect(await within(dialog).findByText(/2 סווגו אוטומטית/)).toBeTruthy();
+    expect(within(dialog).getByLabelText('סעיף בתקציב לשורה 2').value).toBe('shopping'); // סופר יודה
+    expect(within(dialog).getByLabelText('סעיף בתקציב לשורה 3').value).toBe('dining'); // פיצה
+
+    // Fix the broken row (line 4: "xx" date) and import it too.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'תיקון שורה 4' }));
+    fireEvent.change(within(dialog).getByLabelText('תאריך'), { target: { value: '2026-10-03' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'שמירת התיקון' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'ייבוא 3 תנועות' }));
+
+    expect(await within(dialog).findByText('תקציב חכם לפי ההוצאות בפועל')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: /עדכון התקציב/ }));
+    expect(onApplyBudget).toHaveBeenCalledTimes(1);
+    expect(onApplyBudget.mock.calls[0][0]).toMatchObject({ shopping: '1200', dining: '40' });
   });
 });

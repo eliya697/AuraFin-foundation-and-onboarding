@@ -11,6 +11,7 @@ const SESSION_KEY = 'aurafin:dev:session';
 const journeyKey = (id) => `aurafin:dev:journey:${id}`;
 const transactionsKey = (id) => `aurafin:dev:transactions:${id}`;
 const goalsKey = (id) => `aurafin:dev:goals:${id}`;
+const dailyLogsKey = (id) => `aurafin:dev:daily_logs:${id}`;
 const LATENCY_MS = 250;
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -49,7 +50,7 @@ export function createLocalBackend() {
   };
   const updateUser = (id, patch) => saveUsers(users().map((u) => (u.id === id ? { ...u, ...patch } : u)));
 
-  // Synced rows (transactions, goals): `syncedAt` stands in for the server's updated_at, and an older
+  // Synced rows (transactions, goals, daily logs): `syncedAt` stands in for the server's updated_at, and an older
   // write never replaces a newer one (the keep_newest_client_write trigger).
   async function listSynced(key, { since = 0 } = {}) {
     await wait();
@@ -165,6 +166,8 @@ export function createLocalBackend() {
     upsertTransactions: (userId, rows) => upsertSynced(transactionsKey(userId), rows),
     listGoals: (userId, options) => listSynced(goalsKey(userId), options),
     upsertGoals: (userId, rows) => upsertSynced(goalsKey(userId), rows),
+    listDailyLogs: (userId, options) => listSynced(dailyLogsKey(userId), options),
+    upsertDailyLogs: (userId, rows) => upsertSynced(dailyLogsKey(userId), rows),
 
     admin: {
       async listUsers() {

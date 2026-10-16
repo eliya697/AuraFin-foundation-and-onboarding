@@ -26,7 +26,7 @@ const compact = new Intl.NumberFormat('he-IL', { notation: 'compact', maximumFra
 
 function TooltipCard({ title, children }) {
   return (
-    <div dir="rtl" className="rounded-2xl border border-navy/[0.06] bg-white px-4 py-3 text-start shadow-[var(--shadow-lift)]">
+    <div dir="rtl" className="rounded-2xl border border-navy/[0.06] bg-surface px-4 py-3 text-start shadow-[var(--shadow-lift)]">
       <p className="text-sm font-bold text-navy">{title}</p>
       {children}
     </div>

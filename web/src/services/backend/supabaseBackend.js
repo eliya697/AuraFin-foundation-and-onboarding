@@ -3,11 +3,13 @@ import { BackendError, toBackendError } from './errors.js';
 import { clearAuthParams, initialAuthCallback } from './authCallback.js';
 import { fromRow, toRow } from '../../lib/transactions.js';
 import { goalFromRow, goalToRow } from '../../lib/goals.js';
+import { dailyLogFromRow, dailyLogToRow } from '../../lib/habits.js';
 
 const TX_PAGE = 500;
 const TX_COLUMNS =
   'id, kind, amount, budget_key, merchant, note, occurred_at, source, import_hash, client_updated_at, deleted_at, updated_at';
 const GOAL_COLUMNS = 'id, name, target, saved, deadline, client_updated_at, deleted_at, updated_at';
+const DAILY_LOG_COLUMNS = 'id, log_date, no_spend, tasks, client_updated_at, deleted_at, updated_at';
 
 /**
  * Production backend: Supabase Auth for sessions, Postgres (RLS) for per-user journeys and roles.
@@ -208,6 +210,22 @@ export function createSupabaseBackend(url, anonKey) {
       unwrap(
         await client.from('savings_goals').upsert(goals.map((goal) => goalToRow(goal, userId)), { onConflict: 'id' }),
         'שמירת יעדי החיסכון בענן נכשלה.',
+      );
+    },
+
+    /** Daily check-ins (public.daily_logs, migration 0005); same contract as the goals. */
+    async listDailyLogs(userId, { since = 0 } = {}) {
+      let query = client.from('daily_logs').select(DAILY_LOG_COLUMNS).eq('user_id', userId);
+      if (since) query = query.gt('updated_at', new Date(since).toISOString());
+      const rows = unwrap(await query.order('updated_at').limit(1000), 'טעינת הצ׳ק-אין היומי נכשלה.');
+      return (rows ?? []).map(dailyLogFromRow).filter(Boolean);
+    },
+
+    async upsertDailyLogs(userId, logs) {
+      if (!logs.length) return;
+      unwrap(
+        await client.from('daily_logs').upsert(logs.map((log) => dailyLogToRow(log, userId)), { onConflict: 'id' }),
+        'שמירת הצ׳ק-אין היומי בענן נכשלה.',
       );
     },
 

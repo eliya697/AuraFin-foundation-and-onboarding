@@ -8,7 +8,7 @@ import { GOAL_LIMITS, draftFromGoal, goalFromDraft, newGoalDraft, validateGoalDr
 import { formatCurrency } from '../../lib/budget.js';
 
 const fieldClass =
-  'w-full rounded-2xl border-2 border-navy/10 bg-white px-4 py-3.5 text-lg font-semibold text-navy outline-none transition-colors focus:border-turquoise focus:ring-4 focus:ring-turquoise/15';
+  'w-full rounded-2xl border-2 border-navy/10 bg-surface px-4 py-3.5 text-lg font-semibold text-navy outline-none transition-colors focus:border-turquoise focus:ring-4 focus:ring-turquoise/15';
 
 /** Add / edit a savings goal. When editing, "הפקדה" adds to the saved amount. */
 export default function GoalDialog({ open, goal, onSave, onDelete, onClose }) {
@@ -93,7 +93,7 @@ export default function GoalDialog({ open, goal, onSave, onDelete, onClose }) {
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="-mx-1 mt-4 max-h-[60dvh] space-y-4 overflow-y-auto px-1 pb-1">
+      <form id={formId} onSubmit={submit} noValidate className="-mx-1 mt-4 max-h-[60dvh] space-y-4 overflow-y-auto overscroll-contain px-1 pb-1">
         <TextInput
           name="name"
           label="שם היעד"

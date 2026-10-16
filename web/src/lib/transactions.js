@@ -7,7 +7,7 @@ import { activeScalarFields } from './budget.js';
  *
  * A transaction (as the app keeps it):
  *   { id, kind: 'expense' | 'income', amount: number, budgetKey, merchant, note,
- *     occurredOn: 'YYYY-MM-DD', source: 'manual' | 'csv', importHash: string | null,
+ *     occurredOn: 'YYYY-MM-DD', source: 'manual' | 'csv' | 'pdf', importHash: string | null,
  *     updatedAt: ms epoch (device time of the last edit), deletedAt: ms epoch | null }
  */
 
@@ -22,6 +22,8 @@ const customKeyOf = (id) => `${CUSTOM_PREFIX}${id}`;
 const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const pad = (n) => String(n).padStart(2, '0');
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// 'pdf' rows need migration 0005 (the source check constraint).
+const SOURCES = new Set(['manual', 'csv', 'pdf']);
 
 /** Local calendar date as YYYY-MM-DD (not UTC: a 00:30 purchase in Israel belongs to today). */
 export function todayISO(date = new Date()) {
@@ -131,7 +133,7 @@ export function normalizeTransaction(raw) {
     merchant: typeof raw.merchant === 'string' ? raw.merchant : '',
     note: typeof raw.note === 'string' ? raw.note : '',
     occurredOn: raw.occurredOn,
-    source: raw.source === 'csv' ? 'csv' : 'manual',
+    source: SOURCES.has(raw.source) ? raw.source : 'manual',
     importHash: typeof raw.importHash === 'string' && raw.importHash ? raw.importHash : null,
     updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0,
     deletedAt: Number.isFinite(raw.deletedAt) ? raw.deletedAt : null,

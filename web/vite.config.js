@@ -35,6 +35,21 @@ export default defineConfig(({ command, isPreview, mode }) => ({
   resolve: {
     alias: { '@shared': sharedDir },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunks: an app release doesn't make returning users re-download React,
+        // the animation runtime or the charts, and the dashboard chunk stays small.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
+          if (/[\\/]node_modules[\\/](framer-motion|motion-dom|motion-utils)[\\/]/.test(id)) return 'motion';
+          if (/[\\/]node_modules[\\/](recharts|d3-[^\\/]+|victory-vendor|react-smooth|recharts-scale|decimal\.js-light)[\\/]/.test(id)) return 'charts';
+          return undefined;
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     include: ['tests/**/*.test.{js,jsx}'],
