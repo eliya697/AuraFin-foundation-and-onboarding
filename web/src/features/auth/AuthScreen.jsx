@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, ArrowRight, Eye, EyeOff, KeyRound, Loader2, LogIn, Mail, MailCheck, UserPlus } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, KeyRound, Loader2, LogIn, Mail, MailCheck, UserPlus } from 'lucide-react';
 import Button from '../../components/ui/Button.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Logo from '../../components/ui/Logo.jsx';
+import { ToastStack, useToasts } from '../../components/ui/Toast.jsx';
 import { useAuth } from '../../state/AuthContext.jsx';
 import { BACK_PRIORITY, useBackHandler } from '../../hooks/useBackHandler.js';
 
@@ -16,6 +17,35 @@ const COPY = {
   forgot: { title: 'איפוס סיסמה', subtitle: 'נשלח אליכם קישור לבחירת סיסמה חדשה.', submit: 'שליחת קישור', icon: Mail },
   recovery: { title: 'סיסמה חדשה', subtitle: 'בחרו סיסמה חדשה לחשבון.', submit: 'שמירת הסיסמה', icon: KeyRound },
 };
+
+const TABS = [
+  { mode: 'signin', label: 'התחברות' },
+  { mode: 'signup', label: 'הרשמה' },
+  { mode: 'forgot', label: 'שכחתי סיסמה' },
+];
+
+// Toast headline per backend error code; the body is the backend's own Hebrew message.
+const ERROR_TITLES = {
+  invalid_credentials: 'ההתחברות נכשלה',
+  email_not_confirmed: 'האימייל עדיין לא אומת',
+  user_already_exists: 'החשבון כבר קיים',
+  email_exists: 'החשבון כבר קיים',
+  network: 'אין חיבור',
+  provider_disabled: 'Google לא זמין כרגע',
+  access_denied: 'ההתחברות בוטלה',
+  oauth_failed: 'ההתחברות עם Google נכשלה',
+};
+
+const errorToast = (error, fallback = 'משהו השתבש. נסו שוב.') => ({
+  tone: 'error',
+  title: ERROR_TITLES[error?.code] ?? 'משהו השתבש',
+  body: error?.message ?? fallback,
+});
+
+function oauthMessage(code) {
+  if (code === 'access_denied') return 'ביטלתם את ההתחברות ב-Google. אפשר לנסות שוב או להתחבר עם אימייל.';
+  return 'Google לא השלים את ההתחברות. נסו שוב, או התחברו עם אימייל וסיסמה.';
+}
 
 function validate(mode, { email, password, confirm }) {
   const errors = {};
@@ -32,20 +62,38 @@ function validate(mode, { email, password, confirm }) {
   return errors;
 }
 
-/** Login / sign-up / forgot-password / set-new-password. Hebrew, RTL, mobile-first. */
+/** 0–3: long enough, letters + digits, then a symbol or 12+ characters. */
+export function passwordStrength(password) {
+  if (!password || password.length < MIN_PASSWORD) return password ? 1 : 0;
+  let score = 1;
+  if (/\d/.test(password) && /\p{L}/u.test(password)) score = 2;
+  if (score === 2 && (/[^\p{L}\d]/u.test(password) || password.length >= 12)) score = 3;
+  return score;
+}
+
+/** Login / sign-up / forgot-password / set-new-password, plus Google OAuth. Hebrew, RTL, mobile-first. */
 export default function AuthScreen({ initialMode = 'signin' }) {
-  const { backend, signIn, signUp, requestPasswordReset, updatePassword, resendConfirmation, callbackNotice, dismissCallbackNotice } = useAuth();
+  const { backend, signIn, signUp, signInWithGoogle, requestPasswordReset, updatePassword, resendConfirmation, callbackNotice, dismissCallbackNotice } =
+    useAuth();
+  const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
   const [mode, setMode] = useState(initialMode);
   const [fields, setFields] = useState({ email: '', password: '', confirm: '' });
   const [errors, setErrors] = useState({});
-  const [formError, setFormError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [unconfirmed, setUnconfirmed] = useState(false); // sign-in said "email not confirmed"
   const [resend, setResend] = useState('idle'); // 'idle' | 'sending' | 'sent'
   const copy = COPY[mode];
-  const linkProblem = callbackNotice?.kind === 'error' ? callbackNotice : null;
+  const linkProblem = callbackNotice?.kind === 'error' && callbackNotice.via !== 'oauth' ? callbackNotice : null;
+
+  // Came back from Google with an error (cancelled, provider failure): say so once, as a toast.
+  useEffect(() => {
+    if (callbackNotice?.kind !== 'error' || callbackNotice.via !== 'oauth') return;
+    pushToast(errorToast({ code: callbackNotice.code, message: oauthMessage(callbackNotice.code) }));
+    dismissCallbackNotice();
+  }, [callbackNotice, dismissCallbackNotice, pushToast]);
 
   const sendConfirmation = async () => {
     const email = (notice?.email ?? fields.email).trim();
@@ -55,20 +103,19 @@ export default function AuthScreen({ initialMode = 'signin' }) {
       return;
     }
     setResend('sending');
-    setFormError(null);
     try {
       await resendConfirmation(email);
       setResend('sent');
+      pushToast({ tone: 'success', title: 'נשלח קישור אימות חדש', body: `בדקו את תיבת הדואר של ${email}.` });
     } catch (error) {
       setResend('idle');
-      setFormError(error?.message ?? 'שליחת המייל נכשלה. נסו שוב.');
+      pushToast(errorToast(error, 'שליחת המייל נכשלה. נסו שוב.'));
     }
   };
 
   const switchMode = (next) => {
     setMode(next);
     setErrors({});
-    setFormError(null);
     setNotice(null);
     setUnconfirmed(false);
     setResend('idle');
@@ -81,12 +128,28 @@ export default function AuthScreen({ initialMode = 'signin' }) {
     const { value } = event.target;
     setFields((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
-    setFormError(null);
+  };
+
+  // Validate a field when the user leaves it; an empty field is only flagged on submit.
+  const check = (key) => () => {
+    if (!fields[key]) return;
+    setErrors((prev) => ({ ...prev, [key]: validate(mode, fields)[key] }));
+  };
+
+  const continueWithGoogle = async () => {
+    if (googleBusy || busy) return;
+    setGoogleBusy(true);
+    try {
+      await signInWithGoogle(); // navigates away to Google on success
+    } catch (error) {
+      setGoogleBusy(false);
+      pushToast(errorToast(error));
+    }
   };
 
   const submit = async (event) => {
     event.preventDefault();
-    if (busy) return;
+    if (busy || googleBusy) return;
     const found = validate(mode, fields);
     setErrors(found);
     if (Object.values(found).some(Boolean)) {
@@ -94,7 +157,6 @@ export default function AuthScreen({ initialMode = 'signin' }) {
       return;
     }
     setBusy(true);
-    setFormError(null);
     try {
       if (mode === 'signin') {
         await signIn(fields.email, fields.password);
@@ -113,9 +175,10 @@ export default function AuthScreen({ initialMode = 'signin' }) {
         setNotice({ title: 'בדקו את תיבת הדואר', body: 'אם קיים חשבון עם האימייל הזה, נשלח אליו קישור לאיפוס הסיסמה.' });
       } else {
         await updatePassword(fields.password);
+        pushToast({ tone: 'success', title: 'הסיסמה עודכנה' });
       }
     } catch (error) {
-      setFormError(error?.message ?? 'משהו השתבש. נסו שוב.');
+      pushToast(errorToast(error));
       setUnconfirmed(mode === 'signin' && error?.code === 'email_not_confirmed');
     } finally {
       setBusy(false);
@@ -123,9 +186,17 @@ export default function AuthScreen({ initialMode = 'signin' }) {
   };
 
   const Icon = copy.icon;
+  const showGoogle = Boolean(signInWithGoogle) && (mode === 'signin' || mode === 'signup');
+  const strength = mode === 'signup' || mode === 'recovery' ? passwordStrength(fields.password) : 0;
 
   return (
-    <div className="flex min-h-dvh flex-col px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] safe-x sm:px-8">
+    <div className="relative isolate flex min-h-dvh flex-col overflow-hidden px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] safe-x sm:px-8">
+      {/* Soft brand glow behind the card; decorative only. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-48 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-turquoise/15 blur-3xl" />
+        <div className="absolute -bottom-48 -left-24 h-[24rem] w-[24rem] rounded-full bg-mint/10 blur-3xl" />
+      </div>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-6">
         <div className="mb-6 flex justify-center">
           <Logo size={36} />
@@ -141,18 +212,14 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                   <h1 className="mt-4 text-2xl font-extrabold text-navy">{notice.title}</h1>
                   <p className="mt-2 leading-relaxed text-navy-soft">{notice.body}</p>
                   {notice.canResend && <ResendButton state={resend} onClick={sendConfirmation} className="mt-5 w-full" />}
-                  {formError && (
-                    <p role="alert" className="mt-3 text-sm font-medium text-danger">
-                      {formError}
-                    </p>
-                  )}
                   <Button variant="secondary" className="mt-3 w-full" onClick={() => switchMode('signin')}>
                     חזרה להתחברות
                   </Button>
                 </div>
               ) : (
                 <form noValidate onSubmit={submit}>
-                  <div className="flex items-center gap-3">
+                  {mode !== 'recovery' && <ModeTabs mode={mode} onChange={switchMode} />}
+                  <div className={`flex items-center gap-3 ${mode !== 'recovery' ? 'mt-6' : ''}`}>
                     <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-turquoise to-mint text-white shadow-[var(--shadow-glow)]">
                       <Icon size={22} />
                     </span>
@@ -176,7 +243,18 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                     </div>
                   )}
 
-                  <div className="mt-6 space-y-4">
+                  {showGoogle && (
+                    <>
+                      <GoogleButton busy={googleBusy} disabled={busy} onClick={continueWithGoogle} className="mt-6" />
+                      <div className="mt-5 flex items-center gap-3 text-xs font-semibold text-navy/40">
+                        <span className="h-px flex-1 bg-navy/10" />
+                        או עם אימייל
+                        <span className="h-px flex-1 bg-navy/10" />
+                      </div>
+                    </>
+                  )}
+
+                  <div className={`${showGoogle ? 'mt-5' : 'mt-6'} space-y-4`}>
                     {mode !== 'recovery' && (
                       <Field
                         id="auth-email"
@@ -187,6 +265,7 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                         dir="ltr"
                         value={fields.email}
                         onChange={set('email')}
+                        onBlur={check('email')}
                         error={errors.email}
                       />
                     )}
@@ -199,7 +278,9 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                         dir="ltr"
                         value={fields.password}
                         onChange={set('password')}
+                        onBlur={check('password')}
                         error={errors.password}
+                        hint={strength ? <StrengthMeter score={strength} /> : null}
                         trailing={
                           <button
                             type="button"
@@ -221,52 +302,24 @@ export default function AuthScreen({ initialMode = 'signin' }) {
                         dir="ltr"
                         value={fields.confirm}
                         onChange={set('confirm')}
+                        onBlur={check('confirm')}
                         error={errors.confirm}
                       />
                     )}
                   </div>
 
-                  {mode === 'signin' && (
-                    <button
-                      type="button"
-                      onClick={() => switchMode('forgot')}
-                      className="mt-1 inline-flex min-h-12 items-center text-sm font-semibold text-turquoise-dark"
-                    >
-                      שכחתם סיסמה?
-                    </button>
-                  )}
-
                   {(unconfirmed || (linkProblem && mode === 'signin')) && (
-                    <ResendButton state={resend} onClick={sendConfirmation} className="mt-3 w-full" />
+                    <ResendButton state={resend} onClick={sendConfirmation} className="mt-4 w-full" />
                   )}
 
-                  {formError && (
-                    <p role="alert" className="mt-4 flex items-start gap-2 rounded-2xl border border-danger/25 bg-danger/[0.05] p-3 text-sm font-medium text-danger">
-                      <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                      {formError}
-                    </p>
-                  )}
-
-                  <Button type="submit" className="mt-5 w-full" disabled={busy}>
+                  <Button type="submit" className="mt-5 w-full" disabled={busy || googleBusy} aria-busy={busy}>
                     {busy ? <Loader2 size={18} className="animate-spin" /> : <Icon size={18} />}
                     {copy.submit}
                   </Button>
 
-                  <div className="mt-4 text-center text-sm text-navy-soft">
-                    {mode === 'signin' && (
-                      <>
-                        אין לכם חשבון?{' '}
-                        <button type="button" onClick={() => switchMode('signup')} className="inline-flex min-h-12 items-center font-bold text-turquoise-dark">
-                          הרשמה
-                        </button>
-                      </>
-                    )}
-                    {(mode === 'signup' || mode === 'forgot') && (
-                      <button type="button" onClick={() => switchMode('signin')} className="inline-flex min-h-12 items-center gap-1 font-bold text-turquoise-dark">
-                        <ArrowRight size={16} /> כבר יש לי חשבון
-                      </button>
-                    )}
-                  </div>
+                  {mode === 'signup' && (
+                    <p className="mt-4 text-center text-xs leading-relaxed text-navy-soft">הנתונים שלכם נשמרים בחשבון שלכם בלבד ומסונכרנים בין המכשירים.</p>
+                  )}
                 </form>
               )}
             </motion.div>
@@ -282,6 +335,85 @@ export default function AuthScreen({ initialMode = 'signin' }) {
   );
 }
 
+function ModeTabs({ mode, onChange }) {
+  return (
+    <div role="tablist" aria-label="סוג פעולה" className="grid grid-cols-3 rounded-2xl bg-mist p-1">
+      {TABS.map((tab) => {
+        const active = tab.mode === mode;
+        return (
+          <button
+            key={tab.mode}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => !active && onChange(tab.mode)}
+            className={`relative min-h-11 rounded-xl px-2 text-sm font-bold transition-colors ${active ? 'text-navy' : 'text-navy-soft hover:text-navy'}`}
+          >
+            {active && (
+              <motion.span
+                layoutId="auth-tab"
+                transition={{ type: 'spring', stiffness: 480, damping: 36 }}
+                className="absolute inset-0 rounded-xl bg-surface shadow-[var(--shadow-soft)]"
+              />
+            )}
+            <span className="relative">{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function GoogleButton({ busy, disabled, onClick, className = '' }) {
+  const inactive = busy || disabled;
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={inactive}
+      aria-busy={busy}
+      whileTap={inactive ? undefined : { scale: 0.97 }}
+      className={`flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border-2 border-navy/10 bg-surface px-4 text-base font-bold text-navy transition-colors hover:border-navy/20 hover:bg-mist disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+    >
+      {busy ? <Loader2 size={20} className="animate-spin text-navy-soft" /> : <GoogleMark />}
+      {busy ? 'מעבירים אתכם ל-Google…' : 'המשך עם Google'}
+    </motion.button>
+  );
+}
+
+/** The multi-colour Google "G" from Google's sign-in branding guidelines. */
+function GoogleMark() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
+  );
+}
+
+const STRENGTH = [
+  null,
+  { label: 'חלשה', className: 'bg-danger' },
+  { label: 'בינונית', className: 'bg-amber-400' },
+  { label: 'חזקה', className: 'bg-mint' },
+];
+
+function StrengthMeter({ score }) {
+  const level = STRENGTH[score];
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="flex flex-1 gap-1" aria-hidden="true">
+        {[1, 2, 3].map((step) => (
+          <span key={step} className={`h-1.5 flex-1 rounded-full transition-colors ${step <= score ? level.className : 'bg-navy/10'}`} />
+        ))}
+      </div>
+      <span className="text-xs font-semibold text-navy-soft">סיסמה {level.label}</span>
+    </div>
+  );
+}
+
 function ResendButton({ state, onClick, className = '' }) {
   return (
     <Button variant="secondary" onClick={onClick} disabled={state !== 'idle'} className={className}>
@@ -291,7 +423,7 @@ function ResendButton({ state, onClick, className = '' }) {
   );
 }
 
-function Field({ id, label, error, trailing, ...inputProps }) {
+function Field({ id, label, error, trailing, hint, ...inputProps }) {
   const errorId = `${id}-error`;
   return (
     <div>
@@ -312,6 +444,7 @@ function Field({ id, label, error, trailing, ...inputProps }) {
         />
         {trailing}
       </div>
+      {!error && hint}
       {error && (
         <p id={errorId} className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-danger">
           <AlertCircle size={14} className="shrink-0" />

@@ -83,6 +83,8 @@ export function AuthProvider({ children, backendLoader = loadBackend }) {
       isAdmin: user?.role === 'admin' && !user?.suspended,
       signIn: (email, password) => backend.signIn(email.trim(), password),
       signUp: (email, password) => backend.signUp(email.trim(), password),
+      // Only the Supabase backend can do OAuth; the dev-only local backend has no Google sign-in.
+      signInWithGoogle: backend?.signInWithOAuth ? () => backend.signInWithOAuth('google') : null,
       requestPasswordReset: (email) => backend.requestPasswordReset(email.trim()),
       updatePassword: async (password) => {
         await backend.updatePassword(password);

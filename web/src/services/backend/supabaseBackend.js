@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { BackendError, toBackendError } from './errors.js';
-import { clearAuthParams, initialAuthCallback } from './authCallback.js';
+import { BackendError, messageFor, toBackendError } from './errors.js';
+import { clearAuthParams, initialAuthCallback, takePendingOAuth, markPendingOAuth } from './authCallback.js';
 import { fromRow, toRow } from '../../lib/transactions.js';
 import { goalFromRow, goalToRow } from '../../lib/goals.js';
 import { dailyLogFromRow, dailyLogToRow } from '../../lib/habits.js';
@@ -30,10 +30,16 @@ export function createSupabaseBackend(url, anonKey) {
    * the auth screen can explain ({ kind: 'confirmed' | 'error', type, code }) or null.
    */
   const callback = initialAuthCallback();
+  // Set right before we sent the browser to Google: this landing is an OAuth return, not an email link.
+  const oauthProvider = takePendingOAuth();
   const callbackResult = (async () => {
     // getSession() waits for supabase-js to consume #access_token=… (detectSessionInUrl).
     const { data: initial } = await client.auth.getSession();
     if (!callback) return null;
+    if (oauthProvider) {
+      if (callback.kind === 'error') return { ...callback, via: 'oauth', provider: oauthProvider };
+      return initial.session ? { kind: 'confirmed', type: 'oauth', provider: oauthProvider } : { kind: 'error', code: 'oauth_failed', via: 'oauth', provider: oauthProvider };
+    }
     try {
       if (callback.kind === 'token_hash') {
         const { error } = await client.auth.verifyOtp({ token_hash: callback.tokenHash, type: callback.type });
@@ -128,6 +134,28 @@ export function createSupabaseBackend(url, anonKey) {
 
     async signIn(email, password) {
       unwrap(await client.auth.signInWithPassword({ email, password }));
+    },
+
+    /** Leaves the page for the provider; Supabase redirects back to the app root with the session. */
+    async signInWithOAuth(provider) {
+      // signInWithOAuth only navigates to /authorize; for a provider that is switched off in the
+      // dashboard that page is a bare JSON error. Ask the auth server first and explain it here.
+      let settings = null;
+      try {
+        const response = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: anonKey } });
+        if (response.ok) settings = await response.json();
+      } catch (error) {
+        throw toBackendError(error);
+      }
+      if (settings?.external && !settings.external[provider]) {
+        throw new BackendError(messageFor('provider_disabled'), { code: 'provider_disabled' });
+      }
+      markPendingOAuth(provider);
+      const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo } });
+      if (error) {
+        takePendingOAuth();
+        throw toBackendError(error);
+      }
     },
 
     async signUp(email, password) {

@@ -25,7 +25,8 @@ overwrite newer data. The top bar shows the sync state (נשמר / שומר… /
    `0005_statements_daily_logs.sql` (PDF imports, daily check-ins) — or use `supabase db push`.
 2. Auth → URL configuration: add `https://eliya697.github.io/AuraFin-foundation-and-onboarding/` (and
    `http://localhost:5173/` for dev) to the redirect URLs, so confirmation and password-reset links work.
-3. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see `web/.env.example`). Set the same
+3. Build with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see `web/.env.example` and
+   [Production environment](#production-environment-supabase-keys) below). Set the same
    values as `AURAFIN_SUPABASE_URL` / `AURAFIN_SUPABASE_ANON_KEY` on the API host to require a valid,
    non-suspended session on `/api/gate/validate` and `/api/coach/plan` (`api/app/auth.py`).
 4. **Confirmation emails (recommended):** Auth → Email Templates → *Confirm signup*, set the link to
@@ -36,6 +37,18 @@ overwrite newer data. The top bar shows the sync state (נשמר / שומר… /
    login screen says so and offers "שליחת קישור אימות חדש".
 5. Sign up with **eliyamistriel1234@gmail.com** and confirm the email: the `admin_emails` allow-list makes
    that account an admin (an account that already exists is upgraded by the migration's backfill).
+6. **Google sign-in ("המשך עם Google"):**
+   1. Google Cloud Console → APIs & Services → Credentials → *Create OAuth client ID* (type *Web application*).
+      Authorized JavaScript origin: `https://eliya697.github.io`. Authorized redirect URI:
+      `https://<project-ref>.supabase.co/auth/v1/callback` (Supabase shows the exact value on the Google provider page).
+   2. Supabase → Authentication → Sign In / Providers → **Google**: enable it and paste the client ID and secret.
+   3. The redirect URLs from step 2 must be listed: after Google, Supabase sends the user back to the app root
+      (`window.location.origin + BASE_URL`, i.e. `…/AuraFin-foundation-and-onboarding/`, not the bare origin,
+      which on GitHub Pages is a different site).
+
+   Until the provider is enabled the button explains that Google sign-in is not available yet (the app reads
+   `/auth/v1/settings` before redirecting). Google accounts get a `user_roles` row from the same trigger as
+   email sign-ups, and since their email is already verified the admin email becomes an admin either way.
 
 **Roles.** Regular users can read and write only their own journey (RLS). Admins (confirmed email, role
 `admin`, not suspended) get the **ניהול** tab: every user with stage, track and income; a detail sheet
@@ -84,6 +97,29 @@ npm run dev                                          # http://localhost:5173, pr
 - **`VITE_API_URL=https://your-api.example.com npm run deploy`** → uses a hosted API (allow the Pages origin via `AURAFIN_ALLOWED_ORIGINS`, already included by default). If it is unreachable (network error, timeout, 404/405/500/502/503/504 that isn't a JSON response from our API), the app falls back to offline mode and keeps re-checking in the background; once the server answers, the badge turns to "הנתונים אומתו". A 422 validation error, 401 or 403 is never bypassed. The app pings `/api/health` on start so a sleeping free-tier host is awake by the time the gate submits.
 
 In offline mode the gate is enforced by the client only; with a backend, the server remains the authority.
+
+### Production environment (Supabase keys)
+
+Vite inlines `VITE_*` variables **when `vite build` runs**; GitHub Pages only serves the finished files, so
+setting variables "on GitHub Pages" has no effect. `npm run deploy` runs `npm run build` first, which reads,
+in order of precedence: real environment variables → `web/.env.production.local` → `web/.env.production` → `web/.env`.
+
+- **Local deploy (current setup):** `web/.env.production` holds `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+  and is committed. That is safe: the anon / publishable key is public by design (it ships in every bundle;
+  RLS protects the data). Never put the `service_role` key in any `VITE_` variable.
+- **GitHub Actions:** add repository secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Settings →
+  Secrets and variables → Actions) and expose them to the build step:
+  ```yaml
+  - run: npm ci && npm run build
+    working-directory: web
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+  ```
+
+A production build **fails** when both are missing (and when they don't match each other), so a bundle that
+can only show the "נדרשת הגדרה" screen is never published. `AURAFIN_ALLOW_NO_SUPABASE=1 npm run build` opts out
+for a throwaway build. Users who still see that screen are on an old build: one reload picks up the new one.
 
 ### Installable PWA
 

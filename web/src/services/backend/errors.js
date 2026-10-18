@@ -24,6 +24,9 @@ const MESSAGES = {
   otp_expired: 'קישור האימות פג תוקף או שכבר נעשה בו שימוש.',
   email_address_invalid: 'כתובת האימייל לא תקינה.',
   forbidden: 'אין לכם הרשאה לפעולה הזו.',
+  provider_disabled: 'ההתחברות עם Google עדיין לא הופעלה. נסו להתחבר עם אימייל וסיסמה.',
+  access_denied: 'ההתחברות עם Google בוטלה.',
+  oauth_failed: 'ההתחברות עם Google לא הושלמה. נסו שוב.',
 };
 
 export function messageFor(code, fallback = 'משהו השתבש. נסו שוב.') {

@@ -58,3 +58,28 @@ const initial = typeof window === 'undefined' ? null : parseAuthCallback(window.
 export function initialAuthCallback() {
   return initial;
 }
+
+// "Continue with Google" leaves the app; this flag tells the return trip apart from an email link,
+// so an OAuth error (e.g. the user cancelled at Google) is not explained as an expired email link.
+const OAUTH_KEY = 'aurafin.oauthPending';
+const OAUTH_MAX_AGE = 10 * 60 * 1000;
+
+export function markPendingOAuth(provider) {
+  try {
+    window.sessionStorage.setItem(OAUTH_KEY, JSON.stringify({ provider, at: Date.now() }));
+  } catch {
+    // Storage blocked: the return still signs in, only an error would get the generic explanation.
+  }
+}
+
+/** The provider of a sign-in started in this tab in the last few minutes (read once), or null. */
+export function takePendingOAuth() {
+  try {
+    const raw = window.sessionStorage.getItem(OAUTH_KEY);
+    window.sessionStorage.removeItem(OAUTH_KEY);
+    const pending = raw ? JSON.parse(raw) : null;
+    return pending && Date.now() - pending.at < OAUTH_MAX_AGE ? pending.provider : null;
+  } catch {
+    return null;
+  }
+}

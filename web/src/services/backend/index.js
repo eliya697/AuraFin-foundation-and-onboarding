@@ -31,6 +31,10 @@ export function loadBackend() {
         const { createLocalBackend } = await import('./localBackend.js');
         return createLocalBackend();
       }
+      console.error(
+        '[AuraFin] Supabase is not configured in this build: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY were empty when `vite build` ran. ' +
+          'Add them to web/.env.production (or the CI environment) and redeploy — see web/.env.example.',
+      );
       return null;
     })();
   }

@@ -9,7 +9,10 @@ const sharedDir = fileURLToPath(new URL('../shared', import.meta.url));
 // GitHub Pages serves the app from https://eliya697.github.io/AuraFin-foundation-and-onboarding/
 const GH_PAGES_BASE = '/AuraFin-foundation-and-onboarding/';
 
-/** Fails `vite build` instead of shipping a bundle whose sign-in can never reach Supabase. */
+/**
+ * Fails `vite build` instead of shipping a bundle whose sign-in can never reach Supabase. `loadEnv`
+ * reads .env, .env.production(.local) and real environment variables (e.g. CI secrets) alike.
+ */
 function checkSupabaseEnv(mode) {
   return {
     name: 'aurafin-check-supabase-env',
@@ -19,7 +22,13 @@ function checkSupabaseEnv(mode) {
       const url = (env.VITE_SUPABASE_URL ?? '').trim();
       const key = (env.VITE_SUPABASE_ANON_KEY ?? '').trim();
       if (!url && !key) {
-        console.warn('[aurafin] VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set: the build will show a "setup required" screen.');
+        // A production bundle without them can only show the "setup required" screen, so refuse to
+        // build one. AURAFIN_ALLOW_NO_SUPABASE=1 opts out (e.g. a throwaway preview build).
+        const message =
+          `[aurafin] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are not set for the "${mode}" build. ` +
+          'Put them in web/.env.production (or export them / add them as GitHub Actions secrets) — see web/.env.example.';
+        if (mode === 'production' && process.env.AURAFIN_ALLOW_NO_SUPABASE !== '1') throw new Error(message);
+        console.warn(`${message} The build will show a "setup required" screen.`);
         return;
       }
       const problem = !url || !key ? 'Set both VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.' : supabaseConfigProblem(url.replace(/\/+$/, ''), key);
