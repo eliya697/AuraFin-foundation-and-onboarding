@@ -1,0 +1,1 @@
+import{j as m}from"./react-BV4S9J_w.js";import{m as s}from"./motion-CVCT2iBn.js";function u({delay:t=0,y:o=18,className:i="",as:n="div",children:a,...r}){const e=s[n];return m.jsx(e,{initial:{opacity:0,y:o},animate:{opacity:1,y:0},transition:{duration:.5,delay:t,ease:[.22,1,.36,1]},className:i,...r,children:a})}export{u as R};
